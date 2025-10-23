@@ -57,6 +57,14 @@ export class MCPService {
       contentType: z.string().optional(),
     };
     const manualListSchema = z.array(z.object(manualSchema));
+    const downloadSchema = {
+      downloadUrl: z.string().url(),
+      expiresInSeconds: z.number(),
+    };
+    const manualContentSchema = {
+      file: z.object(manualSchema),
+      contentBase64: z.string(),
+    };
 
     this.server.registerTool(
       'list_manuals',
@@ -150,6 +158,153 @@ export class MCPService {
             manuals: results.map(serialiseManual),
           },
         };
+      }
+    );
+
+    this.server.registerTool(
+      'get_manual_download_url',
+      {
+        description: 'Generate a temporary download URL for a manual by ID',
+        inputSchema: {
+          fileId: z.string().describe('The ID of the manual file'),
+          expiresInSeconds: z
+            .number()
+            .int()
+            .min(1)
+            .max(60 * 60)
+            .optional()
+            .describe('Optional expiry in seconds (default 900, max 3600)'),
+        },
+        outputSchema: downloadSchema,
+      },
+      async (args) => {
+        if (typeof this.manualProvider.getManualDownloadUrl !== 'function') {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: 'Manual download URLs are not supported by the configured provider.',
+              },
+            ],
+          };
+        }
+
+        const expiresInSeconds = args.expiresInSeconds;
+
+        try {
+          const downloadUrl = await this.manualProvider.getManualDownloadUrl(args.fileId, {
+            expiresInSeconds,
+          });
+
+          if (!downloadUrl) {
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: `Manual with ID ${args.fileId} not found`,
+                },
+              ],
+            };
+          }
+
+          const effectiveExpiresInSeconds =
+            typeof expiresInSeconds === 'number' ? expiresInSeconds : 900;
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  {
+                    downloadUrl,
+                    expiresInSeconds: effectiveExpiresInSeconds,
+                  },
+                  null,
+                  2
+                ),
+              },
+            ],
+            structuredContent: {
+              downloadUrl,
+              expiresInSeconds: effectiveExpiresInSeconds,
+            },
+          };
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `Failed to generate download URL: ${
+                  error instanceof Error ? error.message : String(error)
+                }`,
+              },
+            ],
+          };
+        }
+      }
+    );
+
+    this.server.registerTool(
+      'get_manual_content',
+      {
+        description:
+          'Fetch the full manual content (base64-encoded) for AI processing. Intended for MCP agent use only.',
+        inputSchema: {
+          fileId: z.string().describe('The ID of the manual file'),
+        },
+        outputSchema: manualContentSchema,
+      },
+      async (args) => {
+        if (typeof this.manualProvider.getManualContent !== 'function') {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: 'Manual content retrieval is not supported by the configured provider.',
+              },
+            ],
+          };
+        }
+
+        try {
+          const result = await this.manualProvider.getManualContent(args.fileId);
+          if (!result) {
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: `Manual with ID ${args.fileId} not found`,
+                },
+              ],
+            };
+          }
+
+          const responsePayload = {
+            file: serialiseManual(result.file),
+            contentBase64: result.contentBase64,
+          };
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(responsePayload, null, 2),
+              },
+            ],
+            structuredContent: responsePayload,
+          };
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `Failed to fetch manual content: ${
+                  error instanceof Error ? error.message : String(error)
+                }`,
+              },
+            ],
+          };
+        }
       }
     );
   }

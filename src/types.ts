@@ -7,3 +7,8 @@ export interface UploadedFile {
   size: number;
   contentType: string;
 }
+
+export interface ManualContent {
+  file: UploadedFile;
+  contentBase64: string;
+}

@@ -1,5 +1,5 @@
-import { ManualProvider } from './manualProvider.js';
-import { UploadedFile } from '../types.js';
+import { ManualProvider, ManualDownloadOptions } from './manualProvider.js';
+import { ManualContent, UploadedFile } from '../types.js';
 
 type ApiManual = Omit<UploadedFile, 'uploadedAt'> & { uploadedAt: string };
 
@@ -9,6 +9,15 @@ type ListResponse = {
 
 type DetailResponse = {
   file: ApiManual;
+};
+
+type DownloadUrlResponse = {
+  downloadUrl: string;
+};
+
+type ContentResponse = {
+  file: ApiManual;
+  contentBase64: string;
 };
 
 export function resolveApiUrl(baseUrl: string): URL {
@@ -94,6 +103,62 @@ export function createManualApiProvider(apiUrl: string, apiToken: string): Manua
         return undefined;
       }
       return toUploadedFile(data.file);
+    },
+
+    async getManualDownloadUrl(id: string, options?: ManualDownloadOptions): Promise<string | undefined> {
+      const expires = options?.expiresInSeconds;
+      const query = typeof expires === 'number' ? `?expiresInSeconds=${expires}` : '';
+
+      const response = await fetch(
+        buildEndpoint(rootUrl, `/api/files/${encodeURIComponent(id)}/download-url${query}`),
+        {
+          headers: {
+            Accept: 'application/json',
+            Authorization: authHeader,
+          },
+        }
+      );
+
+      if (response.status === 404) {
+        return undefined;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          `Manual API request failed (${response.status} ${response.statusText}) for /api/files/${id}/download-url`
+        );
+      }
+
+      const data = (await response.json()) as DownloadUrlResponse;
+      return data.downloadUrl;
+    },
+
+    async getManualContent(id: string): Promise<ManualContent | undefined> {
+      const response = await fetch(
+        buildEndpoint(rootUrl, `/api/files/${encodeURIComponent(id)}/content`),
+        {
+          headers: {
+            Accept: 'application/json',
+            Authorization: authHeader,
+          },
+        }
+      );
+
+      if (response.status === 404) {
+        return undefined;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          `Manual API request failed (${response.status} ${response.statusText}) for /api/files/${id}/content`
+        );
+      }
+
+      const data = (await response.json()) as ContentResponse;
+      return {
+        file: toUploadedFile(data.file),
+        contentBase64: data.contentBase64,
+      };
     },
   };
 }
