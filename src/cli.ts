@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 import dotenv from 'dotenv';
 import { createManualApiProvider, resolveApiUrl } from './services/manualApiProvider.js';
+import { createQAApiProvider } from './services/qaApiProvider.js';
 import type { ManualProvider } from './services/manualProvider.js';
+import type { QAProvider } from './services/qaProvider.js';
 import { MCPService } from './services/mcpService.js';
 
 dotenv.config({ quiet: true });
@@ -102,11 +104,13 @@ async function main() {
 
   let resolvedApiUrl: string;
   let manualProvider: ManualProvider;
+  let qaProvider: QAProvider;
 
   try {
     const url = resolveApiUrl(apiUrl);
     resolvedApiUrl = url.toString();
     manualProvider = createManualApiProvider(resolvedApiUrl, apiToken);
+    qaProvider = createQAApiProvider(resolvedApiUrl, apiToken);
   } catch (error: any) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`Failed to initialise manual provider: ${message}`);
@@ -123,6 +127,7 @@ async function main() {
 
   const service = new MCPService({
     manualProvider,
+    qaProvider,
     name: serverName,
     version: serverVersion,
   });

@@ -12,3 +12,12 @@ export interface ManualContent {
   file: UploadedFile;
   contentBase64: string;
 }
+
+export interface QAEntry {
+  id: string;
+  category: string;
+  question: string;
+  answer: string;
+  createdAt: Date;
+  updatedAt: Date;
+}

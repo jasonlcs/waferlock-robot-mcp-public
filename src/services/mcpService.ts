@@ -1,11 +1,13 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { UploadedFile } from '../types.js';
+import { QAEntry, UploadedFile } from '../types.js';
 import { ManualProvider } from './manualProvider.js';
+import { QAProvider } from './qaProvider.js';
 
 export interface MCPServiceOptions {
   manualProvider: ManualProvider;
+  qaProvider: QAProvider;
   name?: string;
   version?: string;
 }
@@ -27,16 +29,37 @@ function formatManuals(manuals: UploadedFile[]): string {
   return JSON.stringify(manuals.map(serialiseManual), null, 2);
 }
 
+function serialiseQA(entry: QAEntry) {
+  return {
+    ...entry,
+    createdAt: entry.createdAt instanceof Date ? entry.createdAt.toISOString() : entry.createdAt,
+    updatedAt: entry.updatedAt instanceof Date ? entry.updatedAt.toISOString() : entry.updatedAt,
+  };
+}
+
+function formatQA(entry: QAEntry): string {
+  return JSON.stringify(serialiseQA(entry), null, 2);
+}
+
+function formatQAList(entries: QAEntry[]): string {
+  return JSON.stringify(entries.map(serialiseQA), null, 2);
+}
+
 export class MCPService {
   private server: McpServer;
   private manualProvider: ManualProvider;
+  private qaProvider: QAProvider;
 
   constructor(options: MCPServiceOptions) {
     if (!options?.manualProvider) {
       throw new Error('A manual provider must be supplied when creating MCPService');
     }
+    if (!options?.qaProvider) {
+      throw new Error('A QA provider must be supplied when creating MCPService');
+    }
 
     this.manualProvider = options.manualProvider;
+    this.qaProvider = options.qaProvider;
 
     this.server = new McpServer({
       name: options.name || process.env.MCP_SERVER_NAME || 'waferlock-robot-mcp',
@@ -65,6 +88,15 @@ export class MCPService {
       file: z.object(manualSchema),
       contentBase64: z.string(),
     };
+    const qaSchema = {
+      id: z.string(),
+      category: z.string(),
+      question: z.string(),
+      answer: z.string(),
+      createdAt: z.string(),
+      updatedAt: z.string(),
+    };
+    const qaListSchema = z.array(z.object(qaSchema));
 
     this.server.registerTool(
       'list_manuals',
@@ -305,6 +337,105 @@ export class MCPService {
             ],
           };
         }
+      }
+    );
+
+    this.server.registerTool(
+      'list_qa_entries',
+      {
+        description: 'List maintained troubleshooting Q&A entries',
+        inputSchema: {
+          category: z.string().optional().describe('Optional category filter'),
+          search: z.string().optional().describe('Optional keyword search across category, question, and answer'),
+        },
+        outputSchema: {
+          entries: qaListSchema,
+        },
+      },
+      async (args) => {
+        const entries = await this.qaProvider.listEntries({
+          category: args.category,
+          search: args.search,
+        });
+        const serialised = entries.map(serialiseQA);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: formatQAList(entries),
+            },
+          ],
+          structuredContent: {
+            entries: serialised,
+          },
+        };
+      }
+    );
+
+    this.server.registerTool(
+      'search_qa_entries',
+      {
+        description: 'Search Q&A entries by keyword',
+        inputSchema: {
+          query: z.string().describe('Keyword to search across category, question, and answer'),
+        },
+        outputSchema: {
+          entries: qaListSchema,
+        },
+      },
+      async (args) => {
+        const entries = await this.qaProvider.searchEntries(args.query);
+        const serialised = entries.map(serialiseQA);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: formatQAList(entries),
+            },
+          ],
+          structuredContent: {
+            entries: serialised,
+          },
+        };
+      }
+    );
+
+    this.server.registerTool(
+      'get_qa_entry',
+      {
+        description: 'Get a specific Q&A entry by ID',
+        inputSchema: {
+          id: z.string().describe('The ID of the Q&A entry'),
+        },
+        outputSchema: qaSchema,
+      },
+      async (args) => {
+        const entry = await this.qaProvider.getEntryById(args.id);
+
+        if (!entry) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `QA entry with ID ${args.id} not found`,
+              },
+            ],
+          };
+        }
+
+        const serialised = serialiseQA(entry);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: formatQA(entry),
+            },
+          ],
+          structuredContent: serialised,
+        };
       }
     );
   }
