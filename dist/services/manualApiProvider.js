@@ -64,5 +64,42 @@ export function createManualApiProvider(apiUrl, apiToken) {
             }
             return toUploadedFile(data.file);
         },
+        async getManualDownloadUrl(id, options) {
+            const expires = options?.expiresInSeconds;
+            const query = typeof expires === 'number' ? `?expiresInSeconds=${expires}` : '';
+            const response = await fetch(buildEndpoint(rootUrl, `/api/files/${encodeURIComponent(id)}/download-url${query}`), {
+                headers: {
+                    Accept: 'application/json',
+                    Authorization: authHeader,
+                },
+            });
+            if (response.status === 404) {
+                return undefined;
+            }
+            if (!response.ok) {
+                throw new Error(`Manual API request failed (${response.status} ${response.statusText}) for /api/files/${id}/download-url`);
+            }
+            const data = (await response.json());
+            return data.downloadUrl;
+        },
+        async getManualContent(id) {
+            const response = await fetch(buildEndpoint(rootUrl, `/api/files/${encodeURIComponent(id)}/content`), {
+                headers: {
+                    Accept: 'application/json',
+                    Authorization: authHeader,
+                },
+            });
+            if (response.status === 404) {
+                return undefined;
+            }
+            if (!response.ok) {
+                throw new Error(`Manual API request failed (${response.status} ${response.statusText}) for /api/files/${id}/content`);
+            }
+            const data = (await response.json());
+            return {
+                file: toUploadedFile(data.file),
+                contentBase64: data.contentBase64,
+            };
+        },
     };
 }

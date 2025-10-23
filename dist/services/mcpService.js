@@ -15,12 +15,29 @@ function formatManual(manual) {
 function formatManuals(manuals) {
     return JSON.stringify(manuals.map(serialiseManual), null, 2);
 }
+function serialiseQA(entry) {
+    return {
+        ...entry,
+        createdAt: entry.createdAt instanceof Date ? entry.createdAt.toISOString() : entry.createdAt,
+        updatedAt: entry.updatedAt instanceof Date ? entry.updatedAt.toISOString() : entry.updatedAt,
+    };
+}
+function formatQA(entry) {
+    return JSON.stringify(serialiseQA(entry), null, 2);
+}
+function formatQAList(entries) {
+    return JSON.stringify(entries.map(serialiseQA), null, 2);
+}
 export class MCPService {
     constructor(options) {
         if (!options?.manualProvider) {
             throw new Error('A manual provider must be supplied when creating MCPService');
         }
+        if (!options?.qaProvider) {
+            throw new Error('A QA provider must be supplied when creating MCPService');
+        }
         this.manualProvider = options.manualProvider;
+        this.qaProvider = options.qaProvider;
         this.server = new McpServer({
             name: options.name || process.env.MCP_SERVER_NAME || 'waferlock-robot-mcp',
             version: options.version || process.env.MCP_SERVER_VERSION || '1.0.0',
@@ -38,6 +55,23 @@ export class MCPService {
             contentType: z.string().optional(),
         };
         const manualListSchema = z.array(z.object(manualSchema));
+        const downloadSchema = {
+            downloadUrl: z.string().url(),
+            expiresInSeconds: z.number(),
+        };
+        const manualContentSchema = {
+            file: z.object(manualSchema),
+            contentBase64: z.string(),
+        };
+        const qaSchema = {
+            id: z.string(),
+            category: z.string(),
+            question: z.string(),
+            answer: z.string(),
+            createdAt: z.string(),
+            updatedAt: z.string(),
+        };
+        const qaListSchema = z.array(z.object(qaSchema));
         this.server.registerTool('list_manuals', {
             description: 'List all uploaded Waferlock product manuals',
             outputSchema: {
@@ -110,6 +144,206 @@ export class MCPService {
                 structuredContent: {
                     manuals: results.map(serialiseManual),
                 },
+            };
+        });
+        this.server.registerTool('get_manual_download_url', {
+            description: 'Generate a temporary download URL for a manual by ID',
+            inputSchema: {
+                fileId: z.string().describe('The ID of the manual file'),
+                expiresInSeconds: z
+                    .number()
+                    .int()
+                    .min(1)
+                    .max(60 * 60)
+                    .optional()
+                    .describe('Optional expiry in seconds (default 900, max 3600)'),
+            },
+            outputSchema: downloadSchema,
+        }, async (args) => {
+            if (typeof this.manualProvider.getManualDownloadUrl !== 'function') {
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: 'Manual download URLs are not supported by the configured provider.',
+                        },
+                    ],
+                };
+            }
+            const expiresInSeconds = args.expiresInSeconds;
+            try {
+                const downloadUrl = await this.manualProvider.getManualDownloadUrl(args.fileId, {
+                    expiresInSeconds,
+                });
+                if (!downloadUrl) {
+                    return {
+                        content: [
+                            {
+                                type: 'text',
+                                text: `Manual with ID ${args.fileId} not found`,
+                            },
+                        ],
+                    };
+                }
+                const effectiveExpiresInSeconds = typeof expiresInSeconds === 'number' ? expiresInSeconds : 900;
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: JSON.stringify({
+                                downloadUrl,
+                                expiresInSeconds: effectiveExpiresInSeconds,
+                            }, null, 2),
+                        },
+                    ],
+                    structuredContent: {
+                        downloadUrl,
+                        expiresInSeconds: effectiveExpiresInSeconds,
+                    },
+                };
+            }
+            catch (error) {
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: `Failed to generate download URL: ${error instanceof Error ? error.message : String(error)}`,
+                        },
+                    ],
+                };
+            }
+        });
+        this.server.registerTool('get_manual_content', {
+            description: 'Fetch the full manual content (base64-encoded) for AI processing. Intended for MCP agent use only.',
+            inputSchema: {
+                fileId: z.string().describe('The ID of the manual file'),
+            },
+            outputSchema: manualContentSchema,
+        }, async (args) => {
+            if (typeof this.manualProvider.getManualContent !== 'function') {
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: 'Manual content retrieval is not supported by the configured provider.',
+                        },
+                    ],
+                };
+            }
+            try {
+                const result = await this.manualProvider.getManualContent(args.fileId);
+                if (!result) {
+                    return {
+                        content: [
+                            {
+                                type: 'text',
+                                text: `Manual with ID ${args.fileId} not found`,
+                            },
+                        ],
+                    };
+                }
+                const responsePayload = {
+                    file: serialiseManual(result.file),
+                    contentBase64: result.contentBase64,
+                };
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: JSON.stringify(responsePayload, null, 2),
+                        },
+                    ],
+                    structuredContent: responsePayload,
+                };
+            }
+            catch (error) {
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: `Failed to fetch manual content: ${error instanceof Error ? error.message : String(error)}`,
+                        },
+                    ],
+                };
+            }
+        });
+        this.server.registerTool('list_qa_entries', {
+            description: 'List maintained troubleshooting Q&A entries',
+            inputSchema: {
+                category: z.string().optional().describe('Optional category filter'),
+                search: z.string().optional().describe('Optional keyword search across category, question, and answer'),
+            },
+            outputSchema: {
+                entries: qaListSchema,
+            },
+        }, async (args) => {
+            const entries = await this.qaProvider.listEntries({
+                category: args.category,
+                search: args.search,
+            });
+            const serialised = entries.map(serialiseQA);
+            return {
+                content: [
+                    {
+                        type: 'text',
+                        text: formatQAList(entries),
+                    },
+                ],
+                structuredContent: {
+                    entries: serialised,
+                },
+            };
+        });
+        this.server.registerTool('search_qa_entries', {
+            description: 'Search Q&A entries by keyword',
+            inputSchema: {
+                query: z.string().describe('Keyword to search across category, question, and answer'),
+            },
+            outputSchema: {
+                entries: qaListSchema,
+            },
+        }, async (args) => {
+            const entries = await this.qaProvider.searchEntries(args.query);
+            const serialised = entries.map(serialiseQA);
+            return {
+                content: [
+                    {
+                        type: 'text',
+                        text: formatQAList(entries),
+                    },
+                ],
+                structuredContent: {
+                    entries: serialised,
+                },
+            };
+        });
+        this.server.registerTool('get_qa_entry', {
+            description: 'Get a specific Q&A entry by ID',
+            inputSchema: {
+                id: z.string().describe('The ID of the Q&A entry'),
+            },
+            outputSchema: qaSchema,
+        }, async (args) => {
+            const entry = await this.qaProvider.getEntryById(args.id);
+            if (!entry) {
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: `QA entry with ID ${args.id} not found`,
+                        },
+                    ],
+                };
+            }
+            const serialised = serialiseQA(entry);
+            return {
+                content: [
+                    {
+                        type: 'text',
+                        text: formatQA(entry),
+                    },
+                ],
+                structuredContent: serialised,
             };
         });
     }

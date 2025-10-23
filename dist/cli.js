@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import dotenv from 'dotenv';
 import { createManualApiProvider, resolveApiUrl } from './services/manualApiProvider.js';
+import { createQAApiProvider } from './services/qaApiProvider.js';
 import { MCPService } from './services/mcpService.js';
 dotenv.config({ quiet: true });
 const HELP_TEXT = `Waferlock Robot MCP CLI
@@ -76,10 +77,12 @@ async function main() {
     }
     let resolvedApiUrl;
     let manualProvider;
+    let qaProvider;
     try {
         const url = resolveApiUrl(apiUrl);
         resolvedApiUrl = url.toString();
         manualProvider = createManualApiProvider(resolvedApiUrl, apiToken);
+        qaProvider = createQAApiProvider(resolvedApiUrl, apiToken);
     }
     catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -94,6 +97,7 @@ async function main() {
     }
     const service = new MCPService({
         manualProvider,
+        qaProvider,
         name: serverName,
         version: serverVersion,
     });
