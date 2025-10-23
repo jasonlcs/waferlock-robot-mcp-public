@@ -11,9 +11,13 @@ type DetailResponse = {
   file: ApiManual;
 };
 
-function normaliseUrl(baseUrl: string): URL {
+export function resolveApiUrl(baseUrl: string): URL {
+  const trimmed = baseUrl.trim();
+  const hasProtocol = /^[a-zA-Z][\w+.-]*:/.test(trimmed);
+  const candidate = hasProtocol ? trimmed : `https://${trimmed}`;
+
   try {
-    return new URL(baseUrl);
+    return new URL(candidate);
   } catch {
     throw new Error(`Invalid API URL provided: ${baseUrl}`);
   }
@@ -32,7 +36,7 @@ function toUploadedFile(manual: ApiManual): UploadedFile {
 }
 
 export function createManualApiProvider(apiUrl: string, apiToken: string): ManualProvider {
-  const rootUrl = normaliseUrl(apiUrl);
+  const rootUrl = resolveApiUrl(apiUrl);
 
   if (!apiToken) {
     throw new Error('API token is required to initialise the manual API provider');

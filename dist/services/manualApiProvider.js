@@ -1,6 +1,9 @@
-function normaliseUrl(baseUrl) {
+export function resolveApiUrl(baseUrl) {
+    const trimmed = baseUrl.trim();
+    const hasProtocol = /^[a-zA-Z][\w+.-]*:/.test(trimmed);
+    const candidate = hasProtocol ? trimmed : `https://${trimmed}`;
     try {
-        return new URL(baseUrl);
+        return new URL(candidate);
     }
     catch {
         throw new Error(`Invalid API URL provided: ${baseUrl}`);
@@ -17,7 +20,7 @@ function toUploadedFile(manual) {
     };
 }
 export function createManualApiProvider(apiUrl, apiToken) {
-    const rootUrl = normaliseUrl(apiUrl);
+    const rootUrl = resolveApiUrl(apiUrl);
     if (!apiToken) {
         throw new Error('API token is required to initialise the manual API provider');
     }

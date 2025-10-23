@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import dotenv from 'dotenv';
-import { createManualApiProvider } from './services/manualApiProvider.js';
+import { createManualApiProvider, resolveApiUrl } from './services/manualApiProvider.js';
 import { MCPService } from './services/mcpService.js';
 dotenv.config();
 const HELP_TEXT = `Waferlock Robot MCP CLI
@@ -74,7 +74,18 @@ async function main() {
         console.error('Error: API token is required. Provide via --api-token or API_TOKEN/WAFERLOCK_API_TOKEN environment variable.');
         process.exit(1);
     }
-    const manualProvider = createManualApiProvider(apiUrl, apiToken);
+    let resolvedApiUrl;
+    let manualProvider;
+    try {
+        const url = resolveApiUrl(apiUrl);
+        resolvedApiUrl = url.toString();
+        manualProvider = createManualApiProvider(resolvedApiUrl, apiToken);
+    }
+    catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`Failed to initialise manual provider: ${message}`);
+        process.exit(1);
+    }
     const serverName = resolveOption(parsed['server-name'], process.env.MCP_SERVER_NAME);
     const serverVersion = resolveOption(parsed['server-version'], process.env.MCP_SERVER_VERSION);
     const mcpToken = resolveOption(parsed['mcp-token'], process.env.MCP_TOKEN);
@@ -87,7 +98,7 @@ async function main() {
         version: serverVersion,
     });
     try {
-        console.error(`Connecting Waferlock MCP to API at ${apiUrl}`);
+        console.error(`Connecting Waferlock MCP to API at ${resolvedApiUrl}`);
         await service.start();
     }
     catch (error) {

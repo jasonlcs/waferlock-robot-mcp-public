@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import dotenv from 'dotenv';
-import { createManualApiProvider } from './services/manualApiProvider.js';
+import { createManualApiProvider, resolveApiUrl } from './services/manualApiProvider.js';
+import type { ManualProvider } from './services/manualProvider.js';
 import { MCPService } from './services/mcpService.js';
 
 dotenv.config();
@@ -99,7 +100,18 @@ async function main() {
     process.exit(1);
   }
 
-  const manualProvider = createManualApiProvider(apiUrl, apiToken);
+  let resolvedApiUrl: string;
+  let manualProvider: ManualProvider;
+
+  try {
+    const url = resolveApiUrl(apiUrl);
+    resolvedApiUrl = url.toString();
+    manualProvider = createManualApiProvider(resolvedApiUrl, apiToken);
+  } catch (error: any) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`Failed to initialise manual provider: ${message}`);
+    process.exit(1);
+  }
 
   const serverName = resolveOption(parsed['server-name'], process.env.MCP_SERVER_NAME);
   const serverVersion = resolveOption(parsed['server-version'], process.env.MCP_SERVER_VERSION);
@@ -116,7 +128,7 @@ async function main() {
   });
 
   try {
-    console.error(`Connecting Waferlock MCP to API at ${apiUrl}`);
+    console.error(`Connecting Waferlock MCP to API at ${resolvedApiUrl}`);
     await service.start();
   } catch (error) {
     console.error('Failed to start Waferlock MCP server:', error);
