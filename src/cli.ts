@@ -4,7 +4,7 @@ import { createManualApiProvider, resolveApiUrl } from './services/manualApiProv
 import type { ManualProvider } from './services/manualProvider.js';
 import { MCPService } from './services/mcpService.js';
 
-dotenv.config();
+dotenv.config({ quiet: true });
 
 type CliValue = string | undefined;
 

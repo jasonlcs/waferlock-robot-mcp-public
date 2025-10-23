@@ -2,7 +2,7 @@
 import dotenv from 'dotenv';
 import { createManualApiProvider, resolveApiUrl } from './services/manualApiProvider.js';
 import { MCPService } from './services/mcpService.js';
-dotenv.config();
+dotenv.config({ quiet: true });
 const HELP_TEXT = `Waferlock Robot MCP CLI
 
 Usage:
