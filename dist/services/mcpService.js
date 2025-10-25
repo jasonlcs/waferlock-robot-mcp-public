@@ -377,6 +377,15 @@ Use this to find specific information in manuals based on semantic similarity.`,
             }
             try {
                 const results = await this.manualProvider.searchManualVector(args.fileId, args.query, args.k, args.minScore);
+                const serializedResults = results.map((r) => ({
+                    ...r,
+                    metadata: {
+                        ...r.metadata,
+                        createdAt: typeof r.metadata?.createdAt === 'object'
+                            ? r.metadata.createdAt.toISOString()
+                            : r.metadata?.createdAt
+                    }
+                }));
                 return {
                     content: [
                         {
@@ -388,7 +397,7 @@ Use this to find specific information in manuals based on semantic similarity.`,
                         },
                     ],
                     structuredContent: {
-                        results,
+                        results: serializedResults,
                     },
                 };
             }

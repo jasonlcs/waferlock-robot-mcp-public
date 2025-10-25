@@ -480,6 +480,16 @@ Use this to find specific information in manuals based on semantic similarity.`,
             args.minScore
           );
 
+          const serializedResults = results.map((r: any) => ({
+            ...r,
+            metadata: {
+              ...r.metadata,
+              createdAt: typeof r.metadata?.createdAt === 'object' 
+                ? r.metadata.createdAt.toISOString() 
+                : r.metadata?.createdAt
+            }
+          }));
+
           return {
             content: [
               {
@@ -493,7 +503,7 @@ Use this to find specific information in manuals based on semantic similarity.`,
               },
             ],
             structuredContent: {
-              results,
+              results: serializedResults,
             },
           };
         } catch (error) {
