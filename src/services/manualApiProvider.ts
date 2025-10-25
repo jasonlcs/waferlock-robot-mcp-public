@@ -160,5 +160,39 @@ export function createManualApiProvider(apiUrl: string, apiToken: string): Manua
         contentBase64: data.contentBase64,
       };
     },
+
+    async searchManualVector(
+      fileId: string,
+      query: string,
+      k: number = 5,
+      minScore: number = 0.0
+    ): Promise<any[]> {
+      const response = await fetch(
+        buildEndpoint(rootUrl, '/api/vector-index/search'),
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            Authorization: authHeader,
+          },
+          body: JSON.stringify({
+            fileId,
+            query,
+            k,
+            minScore,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          `Vector search API request failed (${response.status} ${response.statusText})`
+        );
+      }
+
+      const data: any = await response.json();
+      return data.results || [];
+    },
   };
 }

@@ -438,6 +438,78 @@ export class MCPService {
         };
       }
     );
+
+    this.server.registerTool(
+      'search_manual_vector',
+      {
+        description: `Search manual content using vector similarity search.
+This is much faster than get_manual_content as it only returns relevant chunks without downloading the entire file.
+Use this to find specific information in manuals based on semantic similarity.`,
+        inputSchema: {
+          fileId: z.string().describe('The ID of the manual to search'),
+          query: z.string().describe('The search query (e.g., "L600 特點", "如何安裝")'),
+          k: z.number().int().min(1).max(10).optional().describe('Number of results to return (default 5, max 10)'),
+          minScore: z.number().min(0).max(1).optional().describe('Minimum similarity score (0-1, default 0.0)'),
+        },
+        outputSchema: {
+          results: z.array(z.object({
+            chunkId: z.string(),
+            fileId: z.string(),
+            content: z.string(),
+            score: z.number(),
+          })),
+        },
+      },
+      async (args) => {
+        if (typeof this.manualProvider.searchManualVector !== 'function') {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: 'Vector search is not supported by the configured provider.',
+              },
+            ],
+          };
+        }
+
+        try {
+          const results = await this.manualProvider.searchManualVector(
+            args.fileId,
+            args.query,
+            args.k,
+            args.minScore
+          );
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: results.length > 0
+                  ? `Found ${results.length} relevant chunks:\n\n` +
+                    results.map((r: any, i: number) => 
+                      `${i + 1}. (Score: ${r.score.toFixed(3)})\n${r.content.substring(0, 200)}...`
+                    ).join('\n\n')
+                  : 'No relevant content found for the query.',
+              },
+            ],
+            structuredContent: {
+              results,
+            },
+          };
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `Failed to search manual: ${
+                  error instanceof Error ? error.message : String(error)
+                }`,
+              },
+            ],
+          };
+        }
+      }
+    );
   }
 
   async start(transport: StdioServerTransport = new StdioServerTransport()) {
