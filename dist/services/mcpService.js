@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
+import { thinkingStore } from './thinkingStore.js';
 function serialiseManual(manual) {
     return {
         ...manual,
@@ -411,6 +412,201 @@ Use this to find specific information in manuals based on semantic similarity.`,
                     ],
                 };
             }
+        });
+        // ===== Thinking Tools =====
+        // Inspired by Serena: https://github.com/oraios/serena
+        this.server.registerTool('start_thinking', {
+            description: `Start a structured thinking session for complex queries.
+Use this when you need to analyze information from multiple sources or make comparisons.
+This helps organize your thoughts and ensures thorough analysis.`,
+            inputSchema: {
+                topic: z.string().describe('The main topic or question you are thinking about'),
+                context: z.string().optional().describe('Additional context or background information'),
+            },
+            outputSchema: {
+                thinkingId: z.string(),
+                topic: z.string(),
+                startedAt: z.string(),
+            },
+        }, async (args) => {
+            const session = thinkingStore.createSession(args.topic, args.context);
+            return {
+                content: [
+                    {
+                        type: 'text',
+                        text: `Started thinking about: ${args.topic}\nThinking ID: ${session.id}\n\nUse 'continue_thinking' to record your observations and analysis.`,
+                    },
+                ],
+                structuredContent: {
+                    thinkingId: session.id,
+                    topic: session.topic,
+                    startedAt: session.startedAt.toISOString(),
+                },
+            };
+        });
+        this.server.registerTool('continue_thinking', {
+            description: `Record a thought, observation, or analysis step.
+Call this as you gather information and make deductions.
+Each thought builds on the previous ones to form a complete analysis.`,
+            inputSchema: {
+                thinkingId: z.string().describe('The thinking session ID from start_thinking'),
+                thought: z.string().describe('Your current thought or observation'),
+                type: z.enum(['observation', 'analysis', 'comparison', 'question', 'conclusion'])
+                    .optional()
+                    .describe('Type of thought (default: observation)'),
+                metadata: z.record(z.any()).optional().describe('Additional metadata'),
+            },
+        }, async (args) => {
+            const entry = thinkingStore.addThought(args.thinkingId, args.thought, args.type || 'observation', args.metadata);
+            return {
+                content: [
+                    {
+                        type: 'text',
+                        text: `[${entry.type}] ${entry.thought}`,
+                    },
+                ],
+            };
+        });
+        this.server.registerTool('finish_thinking', {
+            description: `Complete the thinking process and provide your conclusion.
+Always call this after you have gathered enough information and analyzed it.
+This ensures you provide a well-reasoned answer.`,
+            inputSchema: {
+                thinkingId: z.string().describe('The thinking session ID'),
+                conclusion: z.string().describe('Your final conclusion or answer'),
+            },
+            outputSchema: {
+                summary: z.object({
+                    topic: z.string(),
+                    thoughtCount: z.number(),
+                    duration: z.string(),
+                    conclusion: z.string(),
+                }),
+            },
+        }, async (args) => {
+            const session = thinkingStore.completeSession(args.thinkingId, args.conclusion);
+            const duration = session.completedAt && session.startedAt
+                ? ((session.completedAt.getTime() - session.startedAt.getTime()) / 1000).toFixed(2)
+                : '0';
+            const summary = {
+                topic: session.topic,
+                thoughtCount: session.thoughts.length,
+                duration: `${duration}s`,
+                conclusion: args.conclusion,
+                thoughts: session.thoughts.map(t => `[${t.type}] ${t.thought}`).join('\n'),
+            };
+            return {
+                content: [
+                    {
+                        type: 'text',
+                        text: `Thinking completed!\n\nTopic: ${summary.topic}\nThoughts: ${summary.thoughtCount}\nDuration: ${summary.duration}\n\nConclusion:\n${summary.conclusion}`,
+                    },
+                ],
+                structuredContent: { summary },
+            };
+        });
+        this.server.registerTool('think_about_collected_information', {
+            description: `Reflect on whether you have collected enough relevant information.
+ALWAYS call this after searching multiple sources or gathering data.
+This prevents incomplete analysis and ensures you have what you need.`,
+            inputSchema: {
+                thinkingId: z.string().optional().describe('Optional thinking session ID to associate'),
+            },
+        }, async (args) => {
+            const prompt = `Take a moment to reflect:
+
+1. **Information Completeness**
+   - Have you searched all relevant manuals?
+   - Did you check both product specs and Q&A entries?
+   - Are there any gaps in the information?
+
+2. **Relevance Check**
+   - Is the information you found relevant to the user's question?
+   - Do you have specific data (numbers, features, etc.) or just general info?
+   - Can you answer with confidence?
+
+3. **Next Steps**
+   - If information is sufficient → proceed to formulate answer
+   - If information is incomplete → search more sources
+   - If information is unclear → ask clarifying questions
+
+What's your assessment?`;
+            if (args.thinkingId) {
+                thinkingStore.addThought(args.thinkingId, 'Reflecting on collected information', 'analysis');
+            }
+            return {
+                content: [{ type: 'text', text: prompt }],
+            };
+        });
+        this.server.registerTool('think_about_task_adherence', {
+            description: `Check if you're still on track with the user's original question.
+Call this before providing your final answer, especially in long conversations.
+Prevents scope creep and ensures you answer what was actually asked.`,
+            inputSchema: {
+                thinkingId: z.string().optional(),
+                originalQuestion: z.string().optional().describe('The user\'s original question'),
+            },
+        }, async (args) => {
+            const prompt = `Verify you're answering the right question:
+
+1. **Original Request**
+   ${args.originalQuestion ? `User asked: "${args.originalQuestion}"` : 'Review the user\'s original question'}
+
+2. **Current Focus**
+   - Are you still addressing this question?
+   - Have you drifted into related but irrelevant topics?
+   - Is your answer directly useful to the user?
+
+3. **Scope Check**
+   - Are you providing too much information?
+   - Are you missing the key point?
+   - Is your answer actionable?
+
+Adjust your approach if needed before finalizing your answer.`;
+            if (args.thinkingId) {
+                thinkingStore.addThought(args.thinkingId, 'Checking task adherence', 'analysis');
+            }
+            return {
+                content: [{ type: 'text', text: prompt }],
+            };
+        });
+        this.server.registerTool('think_about_answer_quality', {
+            description: `Evaluate if your answer is complete and high-quality before responding.
+Always call this before giving your final answer to the user.
+Ensures you provide accurate, helpful, and well-structured responses.`,
+            inputSchema: {
+                thinkingId: z.string().optional(),
+            },
+        }, async (args) => {
+            const prompt = `Before answering, verify quality:
+
+1. **Accuracy**
+   - Is your answer based on actual search results?
+   - Did you cite specific sources (manual names, Q&A entries)?
+   - Are numbers and specs exact (not estimated)?
+
+2. **Completeness**
+   - Did you answer all parts of the user's question?
+   - Are there important caveats or limitations?
+   - Should you mention related information?
+
+3. **Clarity**
+   - Is your answer easy to understand?
+   - Did you use specific examples?
+   - Is the format user-friendly?
+
+4. **Citations**
+   - Did you mention which manual/Q&A the info came from?
+   - Can the user verify your answer?
+   - Are page numbers or sections included?
+
+If any aspect is lacking, improve before responding.`;
+            if (args.thinkingId) {
+                thinkingStore.addThought(args.thinkingId, 'Evaluating answer quality', 'analysis');
+            }
+            return {
+                content: [{ type: 'text', text: prompt }],
+            };
         });
     }
     async start(transport = new StdioServerTransport()) {
