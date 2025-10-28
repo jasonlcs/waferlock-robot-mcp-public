@@ -13,19 +13,30 @@ export class MCPService {
   private manualProvider: any;
   private qaProvider: any;
 
-  constructor(options: { name?: string; version?: string } = {}) {
+  constructor(options: { 
+    name?: string; 
+    version?: string;
+    manualProvider?: any;
+    qaProvider?: any;
+  } = {}) {
     this.serverName = options.name || 'waferlock-robot-mcp';
     this.serverVersion = options.version || '2.1.0';
     
-    const apiUrl = process.env.API_URL || '';
-    const apiToken = process.env.API_TOKEN || '';
+    // Use provided providers or create from env vars
+    if (options.manualProvider && options.qaProvider) {
+      this.manualProvider = options.manualProvider;
+      this.qaProvider = options.qaProvider;
+    } else {
+      const apiUrl = process.env.API_URL || '';
+      const apiToken = process.env.API_TOKEN || '';
 
-    if (!apiUrl || !apiToken) {
-      throw new Error('API_URL and API_TOKEN are required');
+      if (!apiUrl || !apiToken) {
+        throw new Error('API_URL and API_TOKEN are required');
+      }
+
+      this.manualProvider = createManualApiProvider(apiUrl, apiToken);
+      this.qaProvider = createQAApiProvider(apiUrl, apiToken);
     }
-
-    this.manualProvider = createManualApiProvider(apiUrl, apiToken);
-    this.qaProvider = createQAApiProvider(apiUrl, apiToken);
     
     this.server = new McpServer({
       name: this.serverName,
