@@ -108,7 +108,7 @@ async function main() {
     });
     try {
         console.error(`Connecting Waferlock MCP to API at ${resolvedApiUrl}`);
-        await service.start();
+        await service.run();
     }
     catch (error) {
         console.error('Failed to start Waferlock MCP server:', error);
