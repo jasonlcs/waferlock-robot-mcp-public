@@ -68,8 +68,8 @@ class MetadataStore {
         const lines = [];
         for (const [vectorId, metadata] of this.metadata.entries()) {
             const entry = {
-                vectorId,
                 ...metadata,
+                vectorId,
                 createdAt: metadata.createdAt.toISOString(),
             };
             lines.push(JSON.stringify(entry));
