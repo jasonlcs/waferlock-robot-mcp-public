@@ -113,6 +113,44 @@ export class MCPService {
       }
     );
 
+    // Vector Search (1)
+    this.server.registerTool(
+      'search_manual_vector',
+      {
+        description: 'Search within a manual using vector similarity (semantic search)',
+        inputSchema: {
+          fileId: z.string(),
+          query: z.string(),
+          k: z.number().optional(),
+          minScore: z.number().optional(),
+        },
+      },
+      async (args) => {
+        try {
+          const response = await fetch(`${process.env.API_URL || ''}/api/vector-index/search`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${process.env.API_TOKEN || ''}`
+            },
+            body: JSON.stringify({
+              fileId: args.fileId,
+              query: args.query,
+              k: args.k || 5,
+              minScore: args.minScore || 0.0
+            })
+          });
+          const data = await response.json();
+          if (!response.ok) {
+            return { content: [{ type: 'text', text: `Error: ${data.error || 'Search failed'}` }] };
+          }
+          return { content: [{ type: 'text', text: JSON.stringify(data.results, null, 2) }] };
+        } catch (error: any) {
+          return { content: [{ type: 'text', text: `Error: ${error.message}` }] };
+        }
+      }
+    );
+
     // Q&A Tools (3)
     this.server.registerTool(
       'list_qa_entries',
