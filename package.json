@@ -1,8 +1,7 @@
 {
   "name": "waferlock-robot-mcp-public",
-  "version": "1.0.0",
-  "description": "Standalone Waferlock MCP CLI that proxies the public API for ChatGPT Desktop",
-  "type": "module",
+  "version": "2.1.1",
+  "description": "Standalone Waferlock MCP CLI that proxies the public API for ChatGPT Desktop - Now with 31 MCP Tools!",
   "bin": {
     "waferlock-mcp": "dist/cli.js"
   },
