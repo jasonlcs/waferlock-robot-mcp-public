@@ -6,24 +6,26 @@ import { createManualApiProvider } from './manualApiProvider.js';
 import { createQAApiProvider } from './qaApiProvider.js';
 import { thinkingStore } from './thinkingStore.js';
 
-const apiUrl = process.env.API_URL || '';
-const apiToken = process.env.API_TOKEN || '';
-
-if (!apiUrl || !apiToken) {
-  throw new Error('API_URL and API_TOKEN are required');
-}
-
-const manualProvider = createManualApiProvider(apiUrl, apiToken);
-const qaProvider = createQAApiProvider(apiUrl, apiToken);
-
 export class MCPService {
   private server: McpServer;
   private serverName: string;
   private serverVersion: string;
+  private manualProvider: any;
+  private qaProvider: any;
 
   constructor(options: { name?: string; version?: string } = {}) {
     this.serverName = options.name || 'waferlock-robot-mcp';
     this.serverVersion = options.version || '2.1.0';
+    
+    const apiUrl = process.env.API_URL || '';
+    const apiToken = process.env.API_TOKEN || '';
+
+    if (!apiUrl || !apiToken) {
+      throw new Error('API_URL and API_TOKEN are required');
+    }
+
+    this.manualProvider = createManualApiProvider(apiUrl, apiToken);
+    this.qaProvider = createQAApiProvider(apiUrl, apiToken);
     
     this.server = new McpServer({
       name: this.serverName,
@@ -39,7 +41,7 @@ export class MCPService {
       'list_manuals',
       { description: 'List all available manuals', inputSchema: {}, outputSchema: {} },
       async () => {
-        const manuals = await manualProvider.listManuals();
+        const manuals = await this.manualProvider.listManuals();
         return { content: [{ type: 'text', text: JSON.stringify(manuals, null, 2) }] };
       }
     );
@@ -52,7 +54,7 @@ export class MCPService {
         outputSchema: {},
       },
       async (args) => {
-        const manual = await manualProvider.getManual(args.manualId);
+        const manual = await this.manualProvider.getManual(args.manualId);
         return { content: [{ type: 'text', text: JSON.stringify(manual, null, 2) }] };
       }
     );
@@ -65,7 +67,7 @@ export class MCPService {
         outputSchema: {},
       },
       async (args) => {
-        const manuals = await manualProvider.searchManuals(args.query);
+        const manuals = await this.manualProvider.searchManuals(args.query);
         return { content: [{ type: 'text', text: JSON.stringify(manuals, null, 2) }] };
       }
     );
@@ -78,7 +80,7 @@ export class MCPService {
         outputSchema: {},
       },
       async (args) => {
-        const url = await manualProvider.getManualDownloadUrl(args.manualId);
+        const url = await this.manualProvider.getManualDownloadUrl(args.manualId);
         return { content: [{ type: 'text', text: url }] };
       }
     );
@@ -91,7 +93,7 @@ export class MCPService {
         outputSchema: {},
       },
       async (args) => {
-        const content = await manualProvider.getManualContent(args.manualId);
+        const content = await this.manualProvider.getManualContent(args.manualId);
         return { content: [{ type: 'text', text: JSON.stringify(content, null, 2) }] };
       }
     );
@@ -108,7 +110,7 @@ export class MCPService {
         outputSchema: {},
       },
       async (args) => {
-        const entries = await qaProvider.listEntries(args);
+        const entries = await this.qaProvider.listEntries(args);
         return { content: [{ type: 'text', text: JSON.stringify(entries, null, 2) }] };
       }
     );
@@ -124,7 +126,7 @@ export class MCPService {
         outputSchema: {},
       },
       async (args) => {
-        const entries = await qaProvider.intelligentSearch(args.query, args.limit);
+        const entries = await this.qaProvider.intelligentSearch(args.query, args.limit);
         return { content: [{ type: 'text', text: JSON.stringify(entries, null, 2) }] };
       }
     );
@@ -137,7 +139,7 @@ export class MCPService {
         outputSchema: {},
       },
       async (args) => {
-        const entry = await qaProvider.getEntryById(args.entryId);
+        const entry = await this.qaProvider.getEntryById(args.entryId);
         return { content: [{ type: 'text', text: JSON.stringify(entry, null, 2) }] };
       }
     );

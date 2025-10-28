@@ -7,17 +7,17 @@ const zod_1 = require("zod");
 const manualApiProvider_js_1 = require("./manualApiProvider.js");
 const qaApiProvider_js_1 = require("./qaApiProvider.js");
 const thinkingStore_js_1 = require("./thinkingStore.js");
-const apiUrl = process.env.API_URL || '';
-const apiToken = process.env.API_TOKEN || '';
-if (!apiUrl || !apiToken) {
-    throw new Error('API_URL and API_TOKEN are required');
-}
-const manualProvider = manualApiProvider_js_1.createManualApiProvider(apiUrl, apiToken);
-const qaProvider = qaApiProvider_js_1.createQAApiProvider(apiUrl, apiToken);
 class MCPService {
     constructor(options = {}) {
         this.serverName = options.name || 'waferlock-robot-mcp';
         this.serverVersion = options.version || '2.1.0';
+        const apiUrl = process.env.API_URL || '';
+        const apiToken = process.env.API_TOKEN || '';
+        if (!apiUrl || !apiToken) {
+            throw new Error('API_URL and API_TOKEN are required');
+        }
+        this.manualProvider = manualApiProvider_js_1.createManualApiProvider(apiUrl, apiToken);
+        this.qaProvider = qaApiProvider_js_1.createQAApiProvider(apiUrl, apiToken);
         this.server = new mcp_js_1.McpServer({
             name: this.serverName,
             version: this.serverVersion,
@@ -27,7 +27,7 @@ class MCPService {
     registerTools() {
         // Manual Management Tools (5)
         this.server.registerTool('list_manuals', { description: 'List all available manuals', inputSchema: {}, outputSchema: {} }, async () => {
-            const manuals = await manualProvider.listManuals();
+            const manuals = await this.manualProvider.listManuals();
             return { content: [{ type: 'text', text: JSON.stringify(manuals, null, 2) }] };
         });
         this.server.registerTool('get_manual_info', {
@@ -35,7 +35,7 @@ class MCPService {
             inputSchema: { manualId: zod_1.z.string() },
             outputSchema: {},
         }, async (args) => {
-            const manual = await manualProvider.getManual(args.manualId);
+            const manual = await this.manualProvider.getManual(args.manualId);
             return { content: [{ type: 'text', text: JSON.stringify(manual, null, 2) }] };
         });
         this.server.registerTool('search_manuals', {
@@ -43,7 +43,7 @@ class MCPService {
             inputSchema: { query: zod_1.z.string() },
             outputSchema: {},
         }, async (args) => {
-            const manuals = await manualProvider.searchManuals(args.query);
+            const manuals = await this.manualProvider.searchManuals(args.query);
             return { content: [{ type: 'text', text: JSON.stringify(manuals, null, 2) }] };
         });
         this.server.registerTool('get_manual_download_url', {
@@ -51,7 +51,7 @@ class MCPService {
             inputSchema: { manualId: zod_1.z.string() },
             outputSchema: {},
         }, async (args) => {
-            const url = await manualProvider.getManualDownloadUrl(args.manualId);
+            const url = await this.manualProvider.getManualDownloadUrl(args.manualId);
             return { content: [{ type: 'text', text: url }] };
         });
         this.server.registerTool('get_manual_content', {
@@ -59,7 +59,7 @@ class MCPService {
             inputSchema: { manualId: zod_1.z.string() },
             outputSchema: {},
         }, async (args) => {
-            const content = await manualProvider.getManualContent(args.manualId);
+            const content = await this.manualProvider.getManualContent(args.manualId);
             return { content: [{ type: 'text', text: JSON.stringify(content, null, 2) }] };
         });
         // Q&A Tools (3)
@@ -71,7 +71,7 @@ class MCPService {
             },
             outputSchema: {},
         }, async (args) => {
-            const entries = await qaProvider.listEntries(args);
+            const entries = await this.qaProvider.listEntries(args);
             return { content: [{ type: 'text', text: JSON.stringify(entries, null, 2) }] };
         });
         this.server.registerTool('search_qa_entries', {
@@ -82,7 +82,7 @@ class MCPService {
             },
             outputSchema: {},
         }, async (args) => {
-            const entries = await qaProvider.intelligentSearch(args.query, args.limit);
+            const entries = await this.qaProvider.intelligentSearch(args.query, args.limit);
             return { content: [{ type: 'text', text: JSON.stringify(entries, null, 2) }] };
         });
         this.server.registerTool('get_qa_entry', {
@@ -90,7 +90,7 @@ class MCPService {
             inputSchema: { entryId: zod_1.z.string() },
             outputSchema: {},
         }, async (args) => {
-            const entry = await qaProvider.getEntryById(args.entryId);
+            const entry = await this.qaProvider.getEntryById(args.entryId);
             return { content: [{ type: 'text', text: JSON.stringify(entry, null, 2) }] };
         });
         // Thinking Tools (6)
