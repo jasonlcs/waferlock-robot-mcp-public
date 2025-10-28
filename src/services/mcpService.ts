@@ -22,7 +22,6 @@ export class MCPService {
     this.serverName = options.name || 'waferlock-robot-mcp';
     this.serverVersion = options.version || '2.1.0';
     
-    // Use provided providers or create from env vars
     if (options.manualProvider && options.qaProvider) {
       this.manualProvider = options.manualProvider;
       this.qaProvider = options.qaProvider;
@@ -47,32 +46,54 @@ export class MCPService {
   }
 
   private registerTools() {
-    // Manual Management Tools (5)
+    // Manual Management Tools (3) - 只提供基本資訊，禁止下載
     this.server.registerTool(
       'list_manuals',
-      { description: 'List all available manuals', inputSchema: {}, outputSchema: {} },
+      { 
+        description: 'List all available manuals with basic metadata (no download)',
+        inputSchema: {}
+      },
       async () => {
         const manuals = await this.manualProvider.listManuals();
-        return { content: [{ type: 'text', text: JSON.stringify(manuals, null, 2) }] };
+        const sanitized = manuals.map((m: any) => ({
+          id: m.id,
+          originalName: m.originalName,
+          uploadedAt: m.uploadedAt,
+          size: m.size,
+          indexStatus: m.indexStatus
+        }));
+        return { content: [{ type: 'text', text: JSON.stringify(sanitized, null, 2) }] };
       }
     );
 
     this.server.registerTool(
       'get_manual_info',
       {
-        description: 'Get information about a specific manual',
+        description: 'Get basic information about a specific manual (metadata only, no content/download)',
         inputSchema: { manualId: z.string() },
       },
       async (args) => {
         const manual = await this.manualProvider.getManualById(args.manualId);
-        return { content: [{ type: 'text', text: JSON.stringify(manual, null, 2) }] };
+        if (!manual) {
+          return { content: [{ type: 'text', text: 'Manual not found' }] };
+        }
+        const info = {
+          id: manual.id,
+          originalName: manual.originalName,
+          uploadedAt: manual.uploadedAt,
+          size: manual.size,
+          indexStatus: manual.indexStatus,
+          numChunks: manual.numChunks,
+          numVectors: manual.numVectors
+        };
+        return { content: [{ type: 'text', text: JSON.stringify(info, null, 2) }] };
       }
     );
 
     this.server.registerTool(
       'search_manuals',
       {
-        description: 'Search manuals by filename',
+        description: 'Search manuals by filename (returns basic info only, no download)',
         inputSchema: { query: z.string() },
       },
       async (args) => {
@@ -81,33 +102,14 @@ export class MCPService {
           m.originalName?.toLowerCase().includes(args.query.toLowerCase()) ||
           m.filename?.toLowerCase().includes(args.query.toLowerCase())
         );
-        return { content: [{ type: 'text', text: JSON.stringify(filtered, null, 2) }] };
-      }
-    );
-
-    this.server.registerTool(
-      'get_manual_download_url',
-      {
-        description: 'Get download URL for a manual',
-        inputSchema: { manualId: z.string() },
-        
-      },
-      async (args) => {
-        const url = await this.manualProvider.getManualDownloadUrl(args.manualId);
-        return { content: [{ type: 'text', text: url }] };
-      }
-    );
-
-    this.server.registerTool(
-      'get_manual_content',
-      {
-        description: 'Get the content of a manual (base64 encoded)',
-        inputSchema: { manualId: z.string() },
-        
-      },
-      async (args) => {
-        const content = await this.manualProvider.getManualContent(args.manualId);
-        return { content: [{ type: 'text', text: JSON.stringify(content, null, 2) }] };
+        const sanitized = filtered.map((m: any) => ({
+          id: m.id,
+          originalName: m.originalName,
+          uploadedAt: m.uploadedAt,
+          size: m.size,
+          indexStatus: m.indexStatus
+        }));
+        return { content: [{ type: 'text', text: JSON.stringify(sanitized, null, 2) }] };
       }
     );
 
@@ -120,7 +122,6 @@ export class MCPService {
           category: z.string().optional(),
           search: z.string().optional(),
         },
-        
       },
       async (args) => {
         const entries = await this.qaProvider.listEntries(args);
@@ -136,7 +137,6 @@ export class MCPService {
           query: z.string(),
           limit: z.number().optional(),
         },
-        
       },
       async (args) => {
         const entries = await this.qaProvider.intelligentSearch(args.query, args.limit);
@@ -149,7 +149,6 @@ export class MCPService {
       {
         description: 'Get a specific Q&A entry by ID',
         inputSchema: { entryId: z.string() },
-        
       },
       async (args) => {
         const entry = await this.qaProvider.getEntryById(args.entryId);
@@ -163,7 +162,6 @@ export class MCPService {
       {
         description: 'Start a thinking process',
         inputSchema: { thought: z.string() },
-        
       },
       async (args) => {
         const id = thinkingStore.startThinking(args.thought);
@@ -179,7 +177,6 @@ export class MCPService {
           thinkingId: z.string(),
           thought: z.string(),
         },
-        
       },
       async (args) => {
         thinkingStore.continueThinking(args.thinkingId, args.thought);
@@ -192,7 +189,6 @@ export class MCPService {
       {
         description: 'Finish a thinking process',
         inputSchema: { thinkingId: z.string() },
-        
       },
       async (args) => {
         const process = thinkingStore.finishThinking(args.thinkingId);
@@ -200,13 +196,11 @@ export class MCPService {
       }
     );
 
-    // Add 3 more thinking helper tools to reach 15 total
     this.server.registerTool(
       'think_about_collected_information',
       {
         description: 'Reflect on collected information',
         inputSchema: { reflection: z.string() },
-        
       },
       async (args) => {
         return { content: [{ type: 'text', text: `Reflected: ${args.reflection}` }] };
@@ -218,7 +212,6 @@ export class MCPService {
       {
         description: 'Check if staying on task',
         inputSchema: { check: z.string() },
-        
       },
       async (args) => {
         return { content: [{ type: 'text', text: `Task check: ${args.check}` }] };
@@ -230,7 +223,6 @@ export class MCPService {
       {
         description: 'Evaluate answer quality',
         inputSchema: { evaluation: z.string() },
-        
       },
       async (args) => {
         return { content: [{ type: 'text', text: `Quality check: ${args.evaluation}` }] };

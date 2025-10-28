@@ -11,7 +11,6 @@ class MCPService {
     constructor(options = {}) {
         this.serverName = options.name || 'waferlock-robot-mcp';
         this.serverVersion = options.version || '2.1.0';
-        // Use provided providers or create from env vars
         if (options.manualProvider && options.qaProvider) {
             this.manualProvider = options.manualProvider;
             this.qaProvider = options.qaProvider;
@@ -32,40 +31,55 @@ class MCPService {
         this.registerTools();
     }
     registerTools() {
-        // Manual Management Tools (5)
-        this.server.registerTool('list_manuals', { description: 'List all available manuals', inputSchema: {}, outputSchema: {} }, async () => {
+        // Manual Management Tools (3) - 只提供基本資訊，禁止下載
+        this.server.registerTool('list_manuals', {
+            description: 'List all available manuals with basic metadata (no download)',
+            inputSchema: {}
+        }, async () => {
             const manuals = await this.manualProvider.listManuals();
-            return { content: [{ type: 'text', text: JSON.stringify(manuals, null, 2) }] };
+            const sanitized = manuals.map((m) => ({
+                id: m.id,
+                originalName: m.originalName,
+                uploadedAt: m.uploadedAt,
+                size: m.size,
+                indexStatus: m.indexStatus
+            }));
+            return { content: [{ type: 'text', text: JSON.stringify(sanitized, null, 2) }] };
         });
         this.server.registerTool('get_manual_info', {
-            description: 'Get information about a specific manual',
+            description: 'Get basic information about a specific manual (metadata only, no content/download)',
             inputSchema: { manualId: zod_1.z.string() },
         }, async (args) => {
             const manual = await this.manualProvider.getManualById(args.manualId);
-            return { content: [{ type: 'text', text: JSON.stringify(manual, null, 2) }] };
+            if (!manual) {
+                return { content: [{ type: 'text', text: 'Manual not found' }] };
+            }
+            const info = {
+                id: manual.id,
+                originalName: manual.originalName,
+                uploadedAt: manual.uploadedAt,
+                size: manual.size,
+                indexStatus: manual.indexStatus,
+                numChunks: manual.numChunks,
+                numVectors: manual.numVectors
+            };
+            return { content: [{ type: 'text', text: JSON.stringify(info, null, 2) }] };
         });
         this.server.registerTool('search_manuals', {
-            description: 'Search manuals by filename',
+            description: 'Search manuals by filename (returns basic info only, no download)',
             inputSchema: { query: zod_1.z.string() },
         }, async (args) => {
             const allManuals = await this.manualProvider.listManuals();
             const filtered = allManuals.filter((m) => m.originalName?.toLowerCase().includes(args.query.toLowerCase()) ||
                 m.filename?.toLowerCase().includes(args.query.toLowerCase()));
-            return { content: [{ type: 'text', text: JSON.stringify(filtered, null, 2) }] };
-        });
-        this.server.registerTool('get_manual_download_url', {
-            description: 'Get download URL for a manual',
-            inputSchema: { manualId: zod_1.z.string() },
-        }, async (args) => {
-            const url = await this.manualProvider.getManualDownloadUrl(args.manualId);
-            return { content: [{ type: 'text', text: url }] };
-        });
-        this.server.registerTool('get_manual_content', {
-            description: 'Get the content of a manual (base64 encoded)',
-            inputSchema: { manualId: zod_1.z.string() },
-        }, async (args) => {
-            const content = await this.manualProvider.getManualContent(args.manualId);
-            return { content: [{ type: 'text', text: JSON.stringify(content, null, 2) }] };
+            const sanitized = filtered.map((m) => ({
+                id: m.id,
+                originalName: m.originalName,
+                uploadedAt: m.uploadedAt,
+                size: m.size,
+                indexStatus: m.indexStatus
+            }));
+            return { content: [{ type: 'text', text: JSON.stringify(sanitized, null, 2) }] };
         });
         // Q&A Tools (3)
         this.server.registerTool('list_qa_entries', {
@@ -120,7 +134,6 @@ class MCPService {
             const process = thinkingStore_js_1.thinkingStore.finishThinking(args.thinkingId);
             return { content: [{ type: 'text', text: JSON.stringify(process, null, 2) }] };
         });
-        // Add 3 more thinking helper tools to reach 15 total
         this.server.registerTool('think_about_collected_information', {
             description: 'Reflect on collected information',
             inputSchema: { reflection: zod_1.z.string() },
