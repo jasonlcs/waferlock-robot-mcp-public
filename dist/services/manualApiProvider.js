@@ -1,4 +1,7 @@
-export function resolveApiUrl(baseUrl) {
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.createManualApiProvider = exports.resolveApiUrl = void 0;
+function resolveApiUrl(baseUrl) {
     const trimmed = baseUrl.trim();
     const hasProtocol = /^[a-zA-Z][\w+.-]*:/.test(trimmed);
     const candidate = hasProtocol ? trimmed : `https://${trimmed}`;
@@ -9,6 +12,7 @@ export function resolveApiUrl(baseUrl) {
         throw new Error(`Invalid API URL provided: ${baseUrl}`);
     }
 }
+exports.resolveApiUrl = resolveApiUrl;
 function buildEndpoint(root, path) {
     const next = new URL(path.replace(/^\//, ''), root);
     return next.toString();
@@ -19,7 +23,7 @@ function toUploadedFile(manual) {
         uploadedAt: manual.uploadedAt ? new Date(manual.uploadedAt) : new Date(),
     };
 }
-export function createManualApiProvider(apiUrl, apiToken) {
+function createManualApiProvider(apiUrl, apiToken) {
     const rootUrl = resolveApiUrl(apiUrl);
     if (!apiToken) {
         throw new Error('API token is required to initialise the manual API provider');
@@ -101,26 +105,6 @@ export function createManualApiProvider(apiUrl, apiToken) {
                 contentBase64: data.contentBase64,
             };
         },
-        async searchManualVector(fileId, query, k = 5, minScore = 0.0) {
-            const response = await fetch(buildEndpoint(rootUrl, '/api/vector-index/search'), {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Accept: 'application/json',
-                    Authorization: authHeader,
-                },
-                body: JSON.stringify({
-                    fileId,
-                    query,
-                    k,
-                    minScore,
-                }),
-            });
-            if (!response.ok) {
-                throw new Error(`Vector search API request failed (${response.status} ${response.statusText})`);
-            }
-            const data = await response.json();
-            return data.results || [];
-        },
     };
 }
+exports.createManualApiProvider = createManualApiProvider;

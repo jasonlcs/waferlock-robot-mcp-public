@@ -1,3 +1,6 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.createQAApiProvider = void 0;
 function toQaEntry(entry) {
     return {
         ...entry,
@@ -5,7 +8,7 @@ function toQaEntry(entry) {
         updatedAt: new Date(entry.updatedAt),
     };
 }
-export function createQAApiProvider(apiUrl, apiToken) {
+function createQAApiProvider(apiUrl, apiToken) {
     const baseUrl = apiUrl.replace(/\/$/, '');
     if (!apiToken) {
         throw new Error('API token is required to initialise the QA API provider');
@@ -54,6 +57,10 @@ export function createQAApiProvider(apiUrl, apiToken) {
             const data = await apiRequest(path);
             return (data.entries || []).map(toQaEntry);
         },
+        async listQA(filter) {
+            // Alias for listEntries
+            return this.listEntries(filter);
+        },
         async getEntryById(id) {
             const data = await apiRequestOptional(`/api/qa/${encodeURIComponent(id)}`);
             if (!data) {
@@ -61,9 +68,14 @@ export function createQAApiProvider(apiUrl, apiToken) {
             }
             return toQaEntry(data.entry);
         },
+        async getQAById(id) {
+            // Alias for getEntryById
+            return this.getEntryById(id);
+        },
         async searchEntries(query) {
             const data = await apiRequest(`/api/qa?search=${encodeURIComponent(query)}`);
             return (data.entries || []).map(toQaEntry);
         },
     };
 }
+exports.createQAApiProvider = createQAApiProvider;
