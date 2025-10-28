@@ -1,14 +1,9 @@
 #!/usr/bin/env node
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-const dotenv_1 = __importDefault(require("dotenv"));
-const manualApiProvider_1 = require("./services/manualApiProvider");
-const qaApiProvider_1 = require("./services/qaApiProvider");
-const mcpService_1 = require("./services/mcpService");
-dotenv_1.default.config({ quiet: true });
+import dotenv from 'dotenv';
+import { createManualApiProvider, resolveApiUrl } from './services/manualApiProvider.js';
+import { createQAApiProvider } from './services/qaApiProvider.js';
+import { MCPService } from './services/mcpService.js';
+dotenv.config({ quiet: true });
 const HELP_TEXT = `Waferlock Robot MCP CLI
 
 Usage:
@@ -84,10 +79,10 @@ async function main() {
     let manualProvider;
     let qaProvider;
     try {
-        const url = manualApiProvider_1.resolveApiUrl(apiUrl);
+        const url = resolveApiUrl(apiUrl);
         resolvedApiUrl = url.toString();
-        manualProvider = manualApiProvider_1.createManualApiProvider(resolvedApiUrl, apiToken);
-        qaProvider = qaApiProvider_1.createQAApiProvider(resolvedApiUrl, apiToken);
+        manualProvider = createManualApiProvider(resolvedApiUrl, apiToken);
+        qaProvider = createQAApiProvider(resolvedApiUrl, apiToken);
     }
     catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -100,7 +95,7 @@ async function main() {
     if (mcpToken) {
         process.env.MCP_TOKEN = mcpToken;
     }
-    const service = mcpService_1.createMcpService({
+    const service = new MCPService({
         manualProvider,
         qaProvider,
         name: serverName,
