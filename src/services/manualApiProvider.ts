@@ -1,24 +1,24 @@
-import { ManualProvider, ManualDownloadOptions } from './manualProvider.js';
-import { ManualContent, UploadedFile } from '../types.js';
+import { ManualProvider, ManualDownloadOptions } from './manualProvider';
+import { ManualContent, UploadedFile } from '../types';
 
 type ApiManual = Omit<UploadedFile, 'uploadedAt'> & { uploadedAt: string };
 
-type ListResponse = {
+interface ListResponse {
   files: ApiManual[];
-};
+}
 
-type DetailResponse = {
+interface DetailResponse {
   file: ApiManual;
-};
+}
 
-type DownloadUrlResponse = {
+interface DownloadUrlResponse {
   downloadUrl: string;
-};
+}
 
-type ContentResponse = {
+interface ContentResponse {
   file: ApiManual;
   contentBase64: string;
-};
+}
 
 export function resolveApiUrl(baseUrl: string): URL {
   const trimmed = baseUrl.trim();
@@ -159,40 +159,6 @@ export function createManualApiProvider(apiUrl: string, apiToken: string): Manua
         file: toUploadedFile(data.file),
         contentBase64: data.contentBase64,
       };
-    },
-
-    async searchManualVector(
-      fileId: string,
-      query: string,
-      k: number = 5,
-      minScore: number = 0.0
-    ): Promise<any[]> {
-      const response = await fetch(
-        buildEndpoint(rootUrl, '/api/vector-index/search'),
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-            Authorization: authHeader,
-          },
-          body: JSON.stringify({
-            fileId,
-            query,
-            k,
-            minScore,
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(
-          `Vector search API request failed (${response.status} ${response.statusText})`
-        );
-      }
-
-      const data: any = await response.json();
-      return data.results || [];
     },
   };
 }

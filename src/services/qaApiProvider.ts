@@ -1,18 +1,18 @@
-import { QAEntry } from '../types.js';
-import { QAProvider } from './qaProvider.js';
+import { QAEntry } from '../types';
+import { QAProvider } from './qaProvider';
 
 type ApiQAEntry = Omit<QAEntry, 'createdAt' | 'updatedAt'> & {
   createdAt: string;
   updatedAt: string;
 };
 
-type ListResponse = {
+interface ListResponse {
   entries: ApiQAEntry[];
-};
+}
 
-type DetailResponse = {
+interface DetailResponse {
   entry: ApiQAEntry;
-};
+}
 
 function toQaEntry(entry: ApiQAEntry): QAEntry {
   return {
@@ -80,7 +80,10 @@ export function createQAApiProvider(apiUrl: string, apiToken: string): QAProvide
       const data = await apiRequest<ListResponse>(path);
       return (data.entries || []).map(toQaEntry);
     },
-
+    async listQA(filter) {
+      // Alias for listEntries
+      return this.listEntries(filter);
+    },
     async getEntryById(id: string) {
       const data = await apiRequestOptional(`/api/qa/${encodeURIComponent(id)}`);
       if (!data) {
@@ -88,10 +91,19 @@ export function createQAApiProvider(apiUrl: string, apiToken: string): QAProvide
       }
       return toQaEntry(data.entry);
     },
-
+    async getQAById(id: string) {
+      // Alias for getEntryById
+      return this.getEntryById(id);
+    },
     async searchEntries(query: string) {
       const data = await apiRequest<ListResponse>(`/api/qa?search=${encodeURIComponent(query)}`);
       return (data.entries || []).map(toQaEntry);
+    },
+    async intelligentSearch(query: string, limit: number = 5) {
+      // API provider delegates to searchEntries for now
+      // TODO: Add dedicated intelligent search endpoint
+      const results = await this.searchEntries(query);
+      return results.slice(0, limit);
     },
   };
 }

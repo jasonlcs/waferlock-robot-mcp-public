@@ -1,21 +1,5 @@
-import { ManualContent, UploadedFile } from '../types.js';
-
-export interface VectorSearchResult {
-  chunkId: string;
-  fileId: string;
-  content: string;
-  score: number;
-  metadata: {
-    chunkId: string;
-    fileId: string;
-    vectorId: number;
-    content: string;
-    startIndex: number;
-    endIndex: number;
-    chunkOrder: number;
-    createdAt: string;
-  };
-}
+import { ManualContent, UploadedFile } from '../types';
+import { s3Service } from './s3Service';
 
 export interface ManualProvider {
   listManuals(): Promise<UploadedFile[]>;
@@ -25,14 +9,27 @@ export interface ManualProvider {
     options?: ManualDownloadOptions
   ): Promise<string | undefined>;
   getManualContent?(id: string): Promise<ManualContent | undefined>;
-  searchManualVector?(
-    fileId: string,
-    query: string,
-    k?: number,
-    minScore?: number
-  ): Promise<VectorSearchResult[]>;
 }
 
 export interface ManualDownloadOptions {
   expiresInSeconds?: number;
+}
+
+export function createS3ManualProvider(): ManualProvider {
+  return {
+    listManuals: () => s3Service.listFiles(),
+    getManualById: (id: string) => s3Service.getFileById(id),
+    getManualDownloadUrl: (id: string, options?: ManualDownloadOptions) =>
+      s3Service.generateDownloadUrl(id, options),
+    getManualContent: async (id: string) => {
+      const result = await s3Service.downloadFileBuffer(id);
+      if (!result) {
+        return undefined;
+      }
+      return {
+        file: result.file,
+        contentBase64: result.buffer.toString('base64'),
+      };
+    },
+  };
 }
