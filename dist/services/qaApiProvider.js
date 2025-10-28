@@ -57,6 +57,10 @@ function createQAApiProvider(apiUrl, apiToken) {
             const data = await apiRequest(path);
             return (data.entries || []).map(toQaEntry);
         },
+        async listQA(filter) {
+            // Alias for listEntries
+            return this.listEntries(filter);
+        },
         async getEntryById(id) {
             const data = await apiRequestOptional(`/api/qa/${encodeURIComponent(id)}`);
             if (!data) {
@@ -64,9 +68,19 @@ function createQAApiProvider(apiUrl, apiToken) {
             }
             return toQaEntry(data.entry);
         },
+        async getQAById(id) {
+            // Alias for getEntryById
+            return this.getEntryById(id);
+        },
         async searchEntries(query) {
             const data = await apiRequest(`/api/qa?search=${encodeURIComponent(query)}`);
             return (data.entries || []).map(toQaEntry);
+        },
+        async intelligentSearch(query, limit = 5) {
+            // API provider delegates to searchEntries for now
+            // TODO: Add dedicated intelligent search endpoint
+            const results = await this.searchEntries(query);
+            return results.slice(0, limit);
         },
     };
 }

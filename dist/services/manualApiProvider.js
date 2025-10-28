@@ -105,27 +105,6 @@ function createManualApiProvider(apiUrl, apiToken) {
                 contentBase64: data.contentBase64,
             };
         },
-        async searchManualVector(fileId, query, k = 5, minScore = 0.0) {
-            const response = await fetch(buildEndpoint(rootUrl, '/api/vector-index/search'), {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Accept: 'application/json',
-                    Authorization: authHeader,
-                },
-                body: JSON.stringify({
-                    fileId,
-                    query,
-                    k,
-                    minScore,
-                }),
-            });
-            if (!response.ok) {
-                throw new Error(`Vector search API request failed (${response.status} ${response.statusText})`);
-            }
-            const data = await response.json();
-            return data.results || [];
-        },
     };
 }
 exports.createManualApiProvider = createManualApiProvider;
