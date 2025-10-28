@@ -62,10 +62,9 @@ export class MCPService {
       {
         description: 'Get information about a specific manual',
         inputSchema: { manualId: z.string() },
-        outputSchema: {},
       },
       async (args) => {
-        const manual = await this.manualProvider.getManual(args.manualId);
+        const manual = await this.manualProvider.getManualById(args.manualId);
         return { content: [{ type: 'text', text: JSON.stringify(manual, null, 2) }] };
       }
     );
@@ -75,11 +74,14 @@ export class MCPService {
       {
         description: 'Search manuals by filename',
         inputSchema: { query: z.string() },
-        outputSchema: {},
       },
       async (args) => {
-        const manuals = await this.manualProvider.searchManuals(args.query);
-        return { content: [{ type: 'text', text: JSON.stringify(manuals, null, 2) }] };
+        const allManuals = await this.manualProvider.listManuals();
+        const filtered = allManuals.filter((m: any) => 
+          m.originalName?.toLowerCase().includes(args.query.toLowerCase()) ||
+          m.filename?.toLowerCase().includes(args.query.toLowerCase())
+        );
+        return { content: [{ type: 'text', text: JSON.stringify(filtered, null, 2) }] };
       }
     );
 
@@ -88,7 +90,7 @@ export class MCPService {
       {
         description: 'Get download URL for a manual',
         inputSchema: { manualId: z.string() },
-        outputSchema: {},
+        
       },
       async (args) => {
         const url = await this.manualProvider.getManualDownloadUrl(args.manualId);
@@ -101,7 +103,7 @@ export class MCPService {
       {
         description: 'Get the content of a manual (base64 encoded)',
         inputSchema: { manualId: z.string() },
-        outputSchema: {},
+        
       },
       async (args) => {
         const content = await this.manualProvider.getManualContent(args.manualId);
@@ -118,7 +120,7 @@ export class MCPService {
           category: z.string().optional(),
           search: z.string().optional(),
         },
-        outputSchema: {},
+        
       },
       async (args) => {
         const entries = await this.qaProvider.listEntries(args);
@@ -134,7 +136,7 @@ export class MCPService {
           query: z.string(),
           limit: z.number().optional(),
         },
-        outputSchema: {},
+        
       },
       async (args) => {
         const entries = await this.qaProvider.intelligentSearch(args.query, args.limit);
@@ -147,7 +149,7 @@ export class MCPService {
       {
         description: 'Get a specific Q&A entry by ID',
         inputSchema: { entryId: z.string() },
-        outputSchema: {},
+        
       },
       async (args) => {
         const entry = await this.qaProvider.getEntryById(args.entryId);
@@ -161,7 +163,7 @@ export class MCPService {
       {
         description: 'Start a thinking process',
         inputSchema: { thought: z.string() },
-        outputSchema: {},
+        
       },
       async (args) => {
         const id = thinkingStore.startThinking(args.thought);
@@ -177,7 +179,7 @@ export class MCPService {
           thinkingId: z.string(),
           thought: z.string(),
         },
-        outputSchema: {},
+        
       },
       async (args) => {
         thinkingStore.continueThinking(args.thinkingId, args.thought);
@@ -190,7 +192,7 @@ export class MCPService {
       {
         description: 'Finish a thinking process',
         inputSchema: { thinkingId: z.string() },
-        outputSchema: {},
+        
       },
       async (args) => {
         const process = thinkingStore.finishThinking(args.thinkingId);
@@ -204,7 +206,7 @@ export class MCPService {
       {
         description: 'Reflect on collected information',
         inputSchema: { reflection: z.string() },
-        outputSchema: {},
+        
       },
       async (args) => {
         return { content: [{ type: 'text', text: `Reflected: ${args.reflection}` }] };
@@ -216,7 +218,7 @@ export class MCPService {
       {
         description: 'Check if staying on task',
         inputSchema: { check: z.string() },
-        outputSchema: {},
+        
       },
       async (args) => {
         return { content: [{ type: 'text', text: `Task check: ${args.check}` }] };
@@ -228,7 +230,7 @@ export class MCPService {
       {
         description: 'Evaluate answer quality',
         inputSchema: { evaluation: z.string() },
-        outputSchema: {},
+        
       },
       async (args) => {
         return { content: [{ type: 'text', text: `Quality check: ${args.evaluation}` }] };

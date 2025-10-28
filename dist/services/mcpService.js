@@ -40,23 +40,22 @@ class MCPService {
         this.server.registerTool('get_manual_info', {
             description: 'Get information about a specific manual',
             inputSchema: { manualId: zod_1.z.string() },
-            outputSchema: {},
         }, async (args) => {
-            const manual = await this.manualProvider.getManual(args.manualId);
+            const manual = await this.manualProvider.getManualById(args.manualId);
             return { content: [{ type: 'text', text: JSON.stringify(manual, null, 2) }] };
         });
         this.server.registerTool('search_manuals', {
             description: 'Search manuals by filename',
             inputSchema: { query: zod_1.z.string() },
-            outputSchema: {},
         }, async (args) => {
-            const manuals = await this.manualProvider.searchManuals(args.query);
-            return { content: [{ type: 'text', text: JSON.stringify(manuals, null, 2) }] };
+            const allManuals = await this.manualProvider.listManuals();
+            const filtered = allManuals.filter((m) => m.originalName?.toLowerCase().includes(args.query.toLowerCase()) ||
+                m.filename?.toLowerCase().includes(args.query.toLowerCase()));
+            return { content: [{ type: 'text', text: JSON.stringify(filtered, null, 2) }] };
         });
         this.server.registerTool('get_manual_download_url', {
             description: 'Get download URL for a manual',
             inputSchema: { manualId: zod_1.z.string() },
-            outputSchema: {},
         }, async (args) => {
             const url = await this.manualProvider.getManualDownloadUrl(args.manualId);
             return { content: [{ type: 'text', text: url }] };
@@ -64,7 +63,6 @@ class MCPService {
         this.server.registerTool('get_manual_content', {
             description: 'Get the content of a manual (base64 encoded)',
             inputSchema: { manualId: zod_1.z.string() },
-            outputSchema: {},
         }, async (args) => {
             const content = await this.manualProvider.getManualContent(args.manualId);
             return { content: [{ type: 'text', text: JSON.stringify(content, null, 2) }] };
@@ -76,7 +74,6 @@ class MCPService {
                 category: zod_1.z.string().optional(),
                 search: zod_1.z.string().optional(),
             },
-            outputSchema: {},
         }, async (args) => {
             const entries = await this.qaProvider.listEntries(args);
             return { content: [{ type: 'text', text: JSON.stringify(entries, null, 2) }] };
@@ -87,7 +84,6 @@ class MCPService {
                 query: zod_1.z.string(),
                 limit: zod_1.z.number().optional(),
             },
-            outputSchema: {},
         }, async (args) => {
             const entries = await this.qaProvider.intelligentSearch(args.query, args.limit);
             return { content: [{ type: 'text', text: JSON.stringify(entries, null, 2) }] };
@@ -95,7 +91,6 @@ class MCPService {
         this.server.registerTool('get_qa_entry', {
             description: 'Get a specific Q&A entry by ID',
             inputSchema: { entryId: zod_1.z.string() },
-            outputSchema: {},
         }, async (args) => {
             const entry = await this.qaProvider.getEntryById(args.entryId);
             return { content: [{ type: 'text', text: JSON.stringify(entry, null, 2) }] };
@@ -104,7 +99,6 @@ class MCPService {
         this.server.registerTool('start_thinking', {
             description: 'Start a thinking process',
             inputSchema: { thought: zod_1.z.string() },
-            outputSchema: {},
         }, async (args) => {
             const id = thinkingStore_js_1.thinkingStore.startThinking(args.thought);
             return { content: [{ type: 'text', text: `Started thinking process: ${id}` }] };
@@ -115,7 +109,6 @@ class MCPService {
                 thinkingId: zod_1.z.string(),
                 thought: zod_1.z.string(),
             },
-            outputSchema: {},
         }, async (args) => {
             thinkingStore_js_1.thinkingStore.continueThinking(args.thinkingId, args.thought);
             return { content: [{ type: 'text', text: 'Thinking continued' }] };
@@ -123,7 +116,6 @@ class MCPService {
         this.server.registerTool('finish_thinking', {
             description: 'Finish a thinking process',
             inputSchema: { thinkingId: zod_1.z.string() },
-            outputSchema: {},
         }, async (args) => {
             const process = thinkingStore_js_1.thinkingStore.finishThinking(args.thinkingId);
             return { content: [{ type: 'text', text: JSON.stringify(process, null, 2) }] };
@@ -132,21 +124,18 @@ class MCPService {
         this.server.registerTool('think_about_collected_information', {
             description: 'Reflect on collected information',
             inputSchema: { reflection: zod_1.z.string() },
-            outputSchema: {},
         }, async (args) => {
             return { content: [{ type: 'text', text: `Reflected: ${args.reflection}` }] };
         });
         this.server.registerTool('think_about_task_adherence', {
             description: 'Check if staying on task',
             inputSchema: { check: zod_1.z.string() },
-            outputSchema: {},
         }, async (args) => {
             return { content: [{ type: 'text', text: `Task check: ${args.check}` }] };
         });
         this.server.registerTool('think_about_answer_quality', {
             description: 'Evaluate answer quality',
             inputSchema: { evaluation: zod_1.z.string() },
-            outputSchema: {},
         }, async (args) => {
             return { content: [{ type: 'text', text: `Quality check: ${args.evaluation}` }] };
         });
