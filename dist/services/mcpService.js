@@ -1,14 +1,20 @@
-import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { z } from 'zod';
-import OpenAI from 'openai';
-import { createS3ManualProvider } from './manualProvider';
-import { createS3QAProvider } from './qaProvider';
-import { caseService } from './caseService';
-import { fileContentStore } from './fileContentStore';
-import { contentExtractionService } from './contentExtractionService';
-import { vectorIndexService } from './vectorIndex/VectorIndexService';
-import { thinkingStore } from './thinkingStore';
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.createMcpService = exports.mcpService = exports.MCPService = void 0;
+const mcp_js_1 = require("@modelcontextprotocol/sdk/server/mcp.js");
+const stdio_js_1 = require("@modelcontextprotocol/sdk/server/stdio.js");
+const zod_1 = require("zod");
+const openai_1 = __importDefault(require("openai"));
+const manualProvider_1 = require("./manualProvider");
+const qaProvider_1 = require("./qaProvider");
+const caseService_1 = require("./caseService");
+const fileContentStore_1 = require("./fileContentStore");
+const contentExtractionService_1 = require("./contentExtractionService");
+const VectorIndexService_1 = require("./vectorIndex/VectorIndexService");
+const thinkingStore_1 = require("./thinkingStore");
 function serialiseManual(manual) {
     return {
         ...manual,
@@ -36,11 +42,11 @@ function formatQA(entry) {
 function formatQAList(entries) {
     return JSON.stringify(entries.map(serialiseQA), null, 2);
 }
-export class MCPService {
+class MCPService {
     constructor(options = {}) {
-        this.manualProvider = options.manualProvider || createS3ManualProvider();
-        this.qaProvider = options.qaProvider || createS3QAProvider();
-        this.server = new McpServer({
+        this.manualProvider = options.manualProvider || manualProvider_1.createS3ManualProvider();
+        this.qaProvider = options.qaProvider || qaProvider_1.createS3QAProvider();
+        this.server = new mcp_js_1.McpServer({
             name: options.name || process.env.MCP_SERVER_NAME || 'waferlock-robot-mcp',
             version: options.version || process.env.MCP_SERVER_VERSION || '1.0.0',
         });
@@ -50,32 +56,32 @@ export class MCPService {
     }
     registerTools() {
         const manualSchema = {
-            id: z.string(),
-            filename: z.string(),
-            originalName: z.string(),
-            s3Key: z.string(),
-            uploadedAt: z.string(),
-            size: z.number().optional(),
-            contentType: z.string().optional(),
+            id: zod_1.z.string(),
+            filename: zod_1.z.string(),
+            originalName: zod_1.z.string(),
+            s3Key: zod_1.z.string(),
+            uploadedAt: zod_1.z.string(),
+            size: zod_1.z.number().optional(),
+            contentType: zod_1.z.string().optional(),
         };
-        const manualListSchema = z.array(z.object(manualSchema));
+        const manualListSchema = zod_1.z.array(zod_1.z.object(manualSchema));
         const downloadSchema = {
-            downloadUrl: z.string().url(),
-            expiresInSeconds: z.number(),
+            downloadUrl: zod_1.z.string().url(),
+            expiresInSeconds: zod_1.z.number(),
         };
         const manualContentSchema = {
-            file: z.object(manualSchema),
-            contentBase64: z.string(),
+            file: zod_1.z.object(manualSchema),
+            contentBase64: zod_1.z.string(),
         };
         const qaSchema = {
-            id: z.string(),
-            category: z.string(),
-            question: z.string(),
-            answer: z.string(),
-            createdAt: z.string(),
-            updatedAt: z.string(),
+            id: zod_1.z.string(),
+            category: zod_1.z.string(),
+            question: zod_1.z.string(),
+            answer: zod_1.z.string(),
+            createdAt: zod_1.z.string(),
+            updatedAt: zod_1.z.string(),
         };
-        const qaListSchema = z.array(z.object(qaSchema));
+        const qaListSchema = zod_1.z.array(zod_1.z.object(qaSchema));
         this.server.registerTool('list_manuals', {
             description: 'List all uploaded Waferlock product manuals',
             outputSchema: {
@@ -99,7 +105,7 @@ export class MCPService {
         this.server.registerTool('get_manual_info', {
             description: 'Get information about a specific manual by ID',
             inputSchema: {
-                fileId: z.string().describe('The ID of the manual file'),
+                fileId: zod_1.z.string().describe('The ID of the manual file'),
             },
             outputSchema: manualSchema,
         }, async (args) => {
@@ -121,7 +127,7 @@ export class MCPService {
         this.server.registerTool('search_manuals', {
             description: 'Search for manuals by filename',
             inputSchema: {
-                query: z.string().describe('Search query for manual filenames'),
+                query: zod_1.z.string().describe('Search query for manual filenames'),
             },
             outputSchema: {
                 manuals: manualListSchema,
@@ -146,8 +152,8 @@ export class MCPService {
         this.server.registerTool('get_manual_download_url', {
             description: 'Generate a temporary download URL for a manual by ID',
             inputSchema: {
-                fileId: z.string().describe('The ID of the manual file'),
-                expiresInSeconds: z
+                fileId: zod_1.z.string().describe('The ID of the manual file'),
+                expiresInSeconds: zod_1.z
                     .number()
                     .int()
                     .min(1)
@@ -187,7 +193,7 @@ export class MCPService {
         this.server.registerTool('get_manual_content', {
             description: 'Fetch the full manual content (base64-encoded) for AI processing. Intended for MCP agent use only.',
             inputSchema: {
-                fileId: z.string().describe('The ID of the manual file'),
+                fileId: zod_1.z.string().describe('The ID of the manual file'),
             },
             outputSchema: manualContentSchema,
         }, async (args) => {
@@ -215,8 +221,8 @@ export class MCPService {
         this.server.registerTool('list_qa_entries', {
             description: 'List maintained troubleshooting Q&A entries',
             inputSchema: {
-                category: z.string().optional().describe('Optional category filter'),
-                search: z.string().optional().describe('Optional keyword search across category, question, and answer'),
+                category: zod_1.z.string().optional().describe('Optional category filter'),
+                search: zod_1.z.string().optional().describe('Optional keyword search across category, question, and answer'),
             },
             outputSchema: {
                 entries: qaListSchema,
@@ -244,9 +250,9 @@ export class MCPService {
 Returns Q&A entries sorted by relevance to the query.
 Matches across question, answer, and category fields.`,
             inputSchema: {
-                query: z.string().describe('What to search for (e.g., "how to install", "error 502")'),
-                limit: z.number().int().min(1).max(10).optional().describe('Number of results (default 5, max 10)'),
-                intelligent: z.boolean().optional().describe('Use intelligent ranking (default true)'),
+                query: zod_1.z.string().describe('What to search for (e.g., "how to install", "error 502")'),
+                limit: zod_1.z.number().int().min(1).max(10).optional().describe('Number of results (default 5, max 10)'),
+                intelligent: zod_1.z.boolean().optional().describe('Use intelligent ranking (default true)'),
             },
             outputSchema: {
                 entries: qaListSchema,
@@ -280,7 +286,7 @@ Matches across question, answer, and category fields.`,
         this.server.registerTool('get_qa_entry', {
             description: 'Get a specific Q&A entry by ID',
             inputSchema: {
-                id: z.string().describe('The ID of the Q&A entry'),
+                id: zod_1.z.string().describe('The ID of the Q&A entry'),
             },
             outputSchema: qaSchema,
         }, async (args) => {
@@ -305,22 +311,22 @@ Matches across question, answer, and category fields.`,
 Searches the extracted text content of a manual and returns the most relevant passages.
 Use this when you need to find specific information from a manual without downloading the entire file.`,
             inputSchema: {
-                fileId: z.string().describe('The ID of the manual to search in'),
-                query: z.string().describe('What to search for (e.g., "installation steps", "troubleshooting")'),
-                limit: z.number().int().min(1).max(10).optional().describe('Number of results to return (default 5, max 10)'),
+                fileId: zod_1.z.string().describe('The ID of the manual to search in'),
+                query: zod_1.z.string().describe('What to search for (e.g., "installation steps", "troubleshooting")'),
+                limit: zod_1.z.number().int().min(1).max(10).optional().describe('Number of results to return (default 5, max 10)'),
             },
             outputSchema: {
-                fileId: z.string(),
-                query: z.string(),
-                resultCount: z.number(),
-                results: z.array(z.object({
-                    id: z.string(),
-                    content: z.string(),
-                    chunkOrder: z.number(),
+                fileId: zod_1.z.string(),
+                query: zod_1.z.string(),
+                resultCount: zod_1.z.number(),
+                results: zod_1.z.array(zod_1.z.object({
+                    id: zod_1.z.string(),
+                    content: zod_1.z.string(),
+                    chunkOrder: zod_1.z.number(),
                 })),
             },
         }, async (args) => {
-            const fileContent = fileContentStore.get(args.fileId);
+            const fileContent = fileContentStore_1.fileContentStore.get(args.fileId);
             if (!fileContent) {
                 return {
                     content: [
@@ -338,7 +344,7 @@ Use this when you need to find specific information from a manual without downlo
                 };
             }
             // 使用搜尋服務找相關段落
-            const results = contentExtractionService.searchChunks(fileContent.chunks, args.query, args.limit || 5);
+            const results = contentExtractionService_1.contentExtractionService.searchChunks(fileContent.chunks, args.query, args.limit || 5);
             const responseData = {
                 fileId: args.fileId,
                 query: args.query,
@@ -367,21 +373,21 @@ Use this when you need to find specific information from a manual without downlo
 Searches the extracted text content of all available manuals and returns matching passages.
 Useful when you don't know which manual contains the information.`,
             inputSchema: {
-                query: z.string().describe('What to search for'),
-                limit: z.number().int().min(1).max(20).optional().describe('Total results to return (default 10, max 20)'),
+                query: zod_1.z.string().describe('What to search for'),
+                limit: zod_1.z.number().int().min(1).max(20).optional().describe('Total results to return (default 10, max 20)'),
             },
             outputSchema: {
-                query: z.string(),
-                totalResults: z.number(),
-                results: z.array(z.object({
-                    fileId: z.string(),
-                    fileName: z.string(),
-                    snippet: z.string(),
-                    chunkOrder: z.number(),
+                query: zod_1.z.string(),
+                totalResults: zod_1.z.number(),
+                results: zod_1.z.array(zod_1.z.object({
+                    fileId: zod_1.z.string(),
+                    fileName: zod_1.z.string(),
+                    snippet: zod_1.z.string(),
+                    chunkOrder: zod_1.z.number(),
                 })),
             },
         }, async (args) => {
-            const allResults = fileContentStore.searchAllChunks(args.query);
+            const allResults = fileContentStore_1.fileContentStore.searchAllChunks(args.query);
             if (allResults.size === 0) {
                 return {
                     content: [
@@ -437,18 +443,18 @@ Useful when you don't know which manual contains the information.`,
             description: `Get indexing statistics for a manual.
 Returns information about the extracted content and chunks for a specific manual.`,
             inputSchema: {
-                fileId: z.string().describe('The ID of the manual'),
+                fileId: zod_1.z.string().describe('The ID of the manual'),
             },
             outputSchema: {
-                fileId: z.string(),
-                fileName: z.string(),
-                isIndexed: z.boolean(),
-                totalChunks: z.number().optional(),
-                totalCharacters: z.number().optional(),
-                extractedAt: z.string().optional(),
+                fileId: zod_1.z.string(),
+                fileName: zod_1.z.string(),
+                isIndexed: zod_1.z.boolean(),
+                totalChunks: zod_1.z.number().optional(),
+                totalCharacters: zod_1.z.number().optional(),
+                extractedAt: zod_1.z.string().optional(),
             },
         }, async (args) => {
-            const fileContent = fileContentStore.get(args.fileId);
+            const fileContent = fileContentStore_1.fileContentStore.get(args.fileId);
             const file = (await this.manualProvider.listManuals()).find(f => f.id === args.fileId);
             if (!file) {
                 throw new Error(`Manual ${args.fileId} not found.`);
@@ -481,32 +487,32 @@ Returns information about the extracted content and chunks for a specific manual
 This is much faster than get_manual_content as it only returns relevant chunks without downloading the entire file.
 Use this to find specific information in manuals based on semantic similarity.`,
             inputSchema: {
-                fileId: z.string().describe('The ID of the manual to search'),
-                query: z.string().describe('The search query (e.g., "L600 特點", "如何安裝")'),
-                k: z.number().int().min(1).max(10).optional().describe('Number of results to return (default 5, max 10)'),
-                minScore: z.number().min(0).max(1).optional().describe('Minimum similarity score (0-1, default 0.0)'),
+                fileId: zod_1.z.string().describe('The ID of the manual to search'),
+                query: zod_1.z.string().describe('The search query (e.g., "L600 特點", "如何安裝")'),
+                k: zod_1.z.number().int().min(1).max(10).optional().describe('Number of results to return (default 5, max 10)'),
+                minScore: zod_1.z.number().min(0).max(1).optional().describe('Minimum similarity score (0-1, default 0.0)'),
             },
             outputSchema: {
-                results: z.array(z.object({
-                    chunkId: z.string(),
-                    fileId: z.string(),
-                    content: z.string(),
-                    score: z.number(),
-                    metadata: z.object({
-                        chunkId: z.string(),
-                        fileId: z.string(),
-                        vectorId: z.number(),
-                        content: z.string(),
-                        startIndex: z.number(),
-                        endIndex: z.number(),
-                        chunkOrder: z.number(),
-                        createdAt: z.string(),
+                results: zod_1.z.array(zod_1.z.object({
+                    chunkId: zod_1.z.string(),
+                    fileId: zod_1.z.string(),
+                    content: zod_1.z.string(),
+                    score: zod_1.z.number(),
+                    metadata: zod_1.z.object({
+                        chunkId: zod_1.z.string(),
+                        fileId: zod_1.z.string(),
+                        vectorId: zod_1.z.number(),
+                        content: zod_1.z.string(),
+                        startIndex: zod_1.z.number(),
+                        endIndex: zod_1.z.number(),
+                        chunkOrder: zod_1.z.number(),
+                        createdAt: zod_1.z.string(),
                     }),
                 })),
             },
         }, async (args) => {
             try {
-                const results = await vectorIndexService.searchVector({
+                const results = await VectorIndexService_1.vectorIndexService.searchVector({
                     fileId: args.fileId,
                     query: args.query,
                     k: args.k,
@@ -556,33 +562,33 @@ Use this to find specific information in manuals based on semantic similarity.`,
 Use this when you don't know which manual contains the information or want to search across multiple manuals.
 This searches the entire manual database using AI-powered semantic understanding.`,
             inputSchema: {
-                query: z.string().describe('The search query (e.g., "連線問題", "L600安裝步驟", "維護週期")'),
-                k: z.number().int().min(1).max(20).optional().describe('Number of results to return (default 5, max 20)'),
-                minScore: z.number().min(0).max(1).optional().describe('Minimum similarity score (0-1, default 0.5)'),
+                query: zod_1.z.string().describe('The search query (e.g., "連線問題", "L600安裝步驟", "維護週期")'),
+                k: zod_1.z.number().int().min(1).max(20).optional().describe('Number of results to return (default 5, max 20)'),
+                minScore: zod_1.z.number().min(0).max(1).optional().describe('Minimum similarity score (0-1, default 0.5)'),
             },
             outputSchema: {
-                results: z.array(z.object({
-                    chunkId: z.string(),
-                    fileId: z.string(),
-                    fileName: z.string(),
-                    content: z.string(),
-                    score: z.number(),
-                    metadata: z.object({
-                        chunkId: z.string(),
-                        fileId: z.string(),
-                        vectorId: z.number(),
-                        content: z.string(),
-                        startIndex: z.number(),
-                        endIndex: z.number(),
-                        chunkOrder: z.number(),
-                        createdAt: z.string(),
+                results: zod_1.z.array(zod_1.z.object({
+                    chunkId: zod_1.z.string(),
+                    fileId: zod_1.z.string(),
+                    fileName: zod_1.z.string(),
+                    content: zod_1.z.string(),
+                    score: zod_1.z.number(),
+                    metadata: zod_1.z.object({
+                        chunkId: zod_1.z.string(),
+                        fileId: zod_1.z.string(),
+                        vectorId: zod_1.z.number(),
+                        content: zod_1.z.string(),
+                        startIndex: zod_1.z.number(),
+                        endIndex: zod_1.z.number(),
+                        chunkOrder: zod_1.z.number(),
+                        createdAt: zod_1.z.string(),
                     }),
                 })),
             },
         }, async (args) => {
             try {
                 // Use the new searchAllManuals method
-                const results = await vectorIndexService.searchAllManuals(args.query, args.k || 5, args.minScore || 0.5);
+                const results = await VectorIndexService_1.vectorIndexService.searchAllManuals(args.query, args.k || 5, args.minScore || 0.5);
                 // Get file info for each result
                 const manuals = await this.manualProvider.listManuals();
                 const fileMap = new Map(manuals.map(m => [m.id, m.originalName]));
@@ -631,22 +637,22 @@ This searches the entire manual database using AI-powered semantic understanding
         this.server.registerTool('create_case', {
             description: 'Create a new customer support case',
             inputSchema: {
-                customerId: z.string().describe('Customer ID or identifier'),
-                customerName: z.string().optional().describe('Customer name'),
-                customerEmail: z.string().email().optional().describe('Customer email'),
-                customerPhone: z.string().optional().describe('Customer phone number'),
-                deviceModel: z.string().optional().describe('Device model'),
-                deviceSerial: z.string().optional().describe('Device serial number'),
-                issueCategory: z.string().describe('Issue category (e.g., connection, power, configuration)'),
-                subject: z.string().describe('Brief subject/title of the issue'),
-                description: z.string().describe('Detailed description of the problem'),
-                priority: z.enum(['low', 'medium', 'high', 'urgent']).optional().describe('Case priority (default: medium)'),
-                assignedTo: z.string().optional().describe('Assign to specific agent'),
-                tags: z.array(z.string()).optional().describe('Tags for categorization'),
+                customerId: zod_1.z.string().describe('Customer ID or identifier'),
+                customerName: zod_1.z.string().optional().describe('Customer name'),
+                customerEmail: zod_1.z.string().email().optional().describe('Customer email'),
+                customerPhone: zod_1.z.string().optional().describe('Customer phone number'),
+                deviceModel: zod_1.z.string().optional().describe('Device model'),
+                deviceSerial: zod_1.z.string().optional().describe('Device serial number'),
+                issueCategory: zod_1.z.string().describe('Issue category (e.g., connection, power, configuration)'),
+                subject: zod_1.z.string().describe('Brief subject/title of the issue'),
+                description: zod_1.z.string().describe('Detailed description of the problem'),
+                priority: zod_1.z.enum(['low', 'medium', 'high', 'urgent']).optional().describe('Case priority (default: medium)'),
+                assignedTo: zod_1.z.string().optional().describe('Assign to specific agent'),
+                tags: zod_1.z.array(zod_1.z.string()).optional().describe('Tags for categorization'),
             },
         }, async (args) => {
             try {
-                const customerCase = await caseService.createCase(args);
+                const customerCase = await caseService_1.caseService.createCase(args);
                 return {
                     content: [
                         {
@@ -677,11 +683,11 @@ This searches the entire manual database using AI-powered semantic understanding
         this.server.registerTool('get_case', {
             description: 'Get details of a specific case',
             inputSchema: {
-                caseId: z.string().describe('Case ID'),
+                caseId: zod_1.z.string().describe('Case ID'),
             },
         }, async (args) => {
             try {
-                const customerCase = await caseService.getCase(args.caseId);
+                const customerCase = await caseService_1.caseService.getCase(args.caseId);
                 if (!customerCase) {
                     return {
                         content: [
@@ -727,21 +733,21 @@ This searches the entire manual database using AI-powered semantic understanding
         this.server.registerTool('update_case', {
             description: 'Update a case with new information',
             inputSchema: {
-                caseId: z.string().describe('Case ID'),
-                status: z.enum(['open', 'in_progress', 'resolved', 'closed']).optional().describe('Update case status'),
-                priority: z.enum(['low', 'medium', 'high', 'urgent']).optional().describe('Update priority'),
-                assignedTo: z.string().optional().describe('Reassign case'),
-                resolution: z.string().optional().describe('Resolution details (when resolving)'),
-                comment: z.string().optional().describe('Add a comment/note'),
-                relatedManuals: z.array(z.string()).optional().describe('Link related manual IDs'),
-                relatedQA: z.array(z.string()).optional().describe('Link related Q&A IDs'),
-                tags: z.array(z.string()).optional().describe('Update tags'),
-                actor: z.string().optional().describe('Who is making this update (default: system)'),
+                caseId: zod_1.z.string().describe('Case ID'),
+                status: zod_1.z.enum(['open', 'in_progress', 'resolved', 'closed']).optional().describe('Update case status'),
+                priority: zod_1.z.enum(['low', 'medium', 'high', 'urgent']).optional().describe('Update priority'),
+                assignedTo: zod_1.z.string().optional().describe('Reassign case'),
+                resolution: zod_1.z.string().optional().describe('Resolution details (when resolving)'),
+                comment: zod_1.z.string().optional().describe('Add a comment/note'),
+                relatedManuals: zod_1.z.array(zod_1.z.string()).optional().describe('Link related manual IDs'),
+                relatedQA: zod_1.z.array(zod_1.z.string()).optional().describe('Link related Q&A IDs'),
+                tags: zod_1.z.array(zod_1.z.string()).optional().describe('Update tags'),
+                actor: zod_1.z.string().optional().describe('Who is making this update (default: system)'),
             },
         }, async (args) => {
             try {
                 const { caseId, actor, ...update } = args;
-                const customerCase = await caseService.updateCase(caseId, update, actor || 'system');
+                const customerCase = await caseService_1.caseService.updateCase(caseId, update, actor || 'system');
                 return {
                     content: [
                         {
@@ -777,18 +783,18 @@ This searches the entire manual database using AI-powered semantic understanding
         this.server.registerTool('search_cases', {
             description: 'Search customer support cases with filters',
             inputSchema: {
-                customerId: z.string().optional().describe('Filter by customer ID'),
-                deviceModel: z.string().optional().describe('Filter by device model'),
-                status: z.enum(['open', 'in_progress', 'resolved', 'closed']).optional().describe('Filter by status'),
-                priority: z.enum(['low', 'medium', 'high', 'urgent']).optional().describe('Filter by priority'),
-                issueCategory: z.string().optional().describe('Filter by issue category'),
-                assignedTo: z.string().optional().describe('Filter by assigned agent'),
-                keyword: z.string().optional().describe('Search in subject, description, resolution'),
-                limit: z.number().int().min(1).max(100).optional().describe('Max results (default 50)'),
+                customerId: zod_1.z.string().optional().describe('Filter by customer ID'),
+                deviceModel: zod_1.z.string().optional().describe('Filter by device model'),
+                status: zod_1.z.enum(['open', 'in_progress', 'resolved', 'closed']).optional().describe('Filter by status'),
+                priority: zod_1.z.enum(['low', 'medium', 'high', 'urgent']).optional().describe('Filter by priority'),
+                issueCategory: zod_1.z.string().optional().describe('Filter by issue category'),
+                assignedTo: zod_1.z.string().optional().describe('Filter by assigned agent'),
+                keyword: zod_1.z.string().optional().describe('Search in subject, description, resolution'),
+                limit: zod_1.z.number().int().min(1).max(100).optional().describe('Max results (default 50)'),
             },
         }, async (args) => {
             try {
-                const cases = await caseService.searchCases(args);
+                const cases = await caseService_1.caseService.searchCases(args);
                 return {
                     content: [
                         {
@@ -827,13 +833,13 @@ This searches the entire manual database using AI-powered semantic understanding
         this.server.registerTool('close_case', {
             description: 'Close a case with resolution',
             inputSchema: {
-                caseId: z.string().describe('Case ID'),
-                resolution: z.string().describe('Final resolution description'),
-                actor: z.string().optional().describe('Who is closing the case'),
+                caseId: zod_1.z.string().describe('Case ID'),
+                resolution: zod_1.z.string().describe('Final resolution description'),
+                actor: zod_1.z.string().optional().describe('Who is closing the case'),
             },
         }, async (args) => {
             try {
-                const customerCase = await caseService.updateCase(args.caseId, {
+                const customerCase = await caseService_1.caseService.updateCase(args.caseId, {
                     status: 'closed',
                     resolution: args.resolution,
                 }, args.actor || 'system');
@@ -876,7 +882,7 @@ This searches the entire manual database using AI-powered semantic understanding
             description: 'Get statistics about all customer support cases',
         }, async () => {
             try {
-                const stats = await caseService.getStatistics();
+                const stats = await caseService_1.caseService.getStatistics();
                 const avgHours = (stats.avgResolutionTime / (1000 * 60 * 60)).toFixed(1);
                 return {
                     content: [
@@ -910,9 +916,9 @@ This searches the entire manual database using AI-powered semantic understanding
         this.server.registerTool('recommend_solutions', {
             description: 'Recommend relevant Q&A solutions based on semantic similarity to the query. Uses AI embeddings to find the most helpful solutions.',
             inputSchema: {
-                query: z.string().describe('The problem or question to find solutions for'),
-                k: z.number().optional().describe('Number of recommendations to return (default: 5)'),
-                minScore: z.number().optional().describe('Minimum similarity score (0-1, default: 0.6)'),
+                query: zod_1.z.string().describe('The problem or question to find solutions for'),
+                k: zod_1.z.number().optional().describe('Number of recommendations to return (default: 5)'),
+                minScore: zod_1.z.number().optional().describe('Minimum similarity score (0-1, default: 0.6)'),
             },
         }, async (args) => {
             try {
@@ -929,7 +935,7 @@ This searches the entire manual database using AI-powered semantic understanding
                     };
                 }
                 // 使用 OpenAI Embeddings 計算相似度
-                const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+                const openai = new openai_1.default({ apiKey: process.env.OPENAI_API_KEY });
                 const queryEmbedding = await openai.embeddings.create({
                     model: 'text-embedding-3-small',
                     input: args.query,
@@ -988,8 +994,8 @@ This searches the entire manual database using AI-powered semantic understanding
         this.server.registerTool('suggest_manuals', {
             description: 'Suggest relevant manuals based on device model, keywords, or problem description. Helps users find the right documentation.',
             inputSchema: {
-                query: z.string().describe('Device model, keywords, or problem description'),
-                maxResults: z.number().optional().describe('Maximum number of manuals to suggest (default: 3)'),
+                query: zod_1.z.string().describe('Device model, keywords, or problem description'),
+                maxResults: zod_1.z.number().optional().describe('Maximum number of manuals to suggest (default: 3)'),
             },
         }, async (args) => {
             try {
@@ -1048,10 +1054,10 @@ This searches the entire manual database using AI-powered semantic understanding
         this.server.registerTool('find_similar_cases', {
             description: 'Find similar historical cases based on problem description. Learn from past solutions to similar issues.',
             inputSchema: {
-                description: z.string().describe('Description of the current problem or case'),
-                deviceModel: z.string().optional().describe('Filter by device model'),
-                k: z.number().optional().describe('Number of similar cases to return (default: 5)'),
-                statusFilter: z.enum(['open', 'in_progress', 'resolved', 'closed', 'all']).optional().describe('Filter by case status (default: resolved)'),
+                description: zod_1.z.string().describe('Description of the current problem or case'),
+                deviceModel: zod_1.z.string().optional().describe('Filter by device model'),
+                k: zod_1.z.number().optional().describe('Number of similar cases to return (default: 5)'),
+                statusFilter: zod_1.z.enum(['open', 'in_progress', 'resolved', 'closed', 'all']).optional().describe('Filter by case status (default: resolved)'),
             },
         }, async (args) => {
             try {
@@ -1067,7 +1073,7 @@ This searches the entire manual database using AI-powered semantic understanding
                 if (statusFilter !== 'all') {
                     searchParams.status = statusFilter;
                 }
-                const cases = await caseService.searchCases(searchParams);
+                const cases = await caseService_1.caseService.searchCases(searchParams);
                 if (cases.length === 0) {
                     return {
                         content: [{
@@ -1077,7 +1083,7 @@ This searches the entire manual database using AI-powered semantic understanding
                     };
                 }
                 // 使用 OpenAI Embeddings 計算相似度
-                const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+                const openai = new openai_1.default({ apiKey: process.env.OPENAI_API_KEY });
                 const queryEmbedding = await openai.embeddings.create({
                     model: 'text-embedding-3-small',
                     input: args.description,
@@ -1188,8 +1194,8 @@ This searches the entire manual database using AI-powered semantic understanding
         this.server.registerTool('get_common_issues', {
             description: 'Get the most common issues based on case frequency, trend analysis, and device distribution. Helps identify recurring problems.',
             inputSchema: {
-                period: z.enum(['week', 'month', 'quarter', 'all']).optional().describe('Time period for analysis (default: month)'),
-                topN: z.number().optional().describe('Number of top issues to return (default: 10)'),
+                period: zod_1.z.enum(['week', 'month', 'quarter', 'all']).optional().describe('Time period for analysis (default: month)'),
+                topN: zod_1.z.number().optional().describe('Number of top issues to return (default: 10)'),
             },
         }, async (args) => {
             try {
@@ -1212,7 +1218,7 @@ This searches the entire manual database using AI-powered semantic understanding
                     }
                 }
                 // 搜尋案例
-                const cases = await caseService.searchCases({
+                const cases = await caseService_1.caseService.searchCases({
                     limit: 1000,
                 });
                 // 過濾時間範圍
@@ -1282,7 +1288,7 @@ This searches the entire manual database using AI-powered semantic understanding
         this.server.registerTool('analyze_resolution_trends', {
             description: 'Analyze case resolution time trends and efficiency metrics. Helps identify bottlenecks and improvement opportunities.',
             inputSchema: {
-                period: z.enum(['week', 'month', 'quarter', 'all']).optional().describe('Time period for analysis (default: month)'),
+                period: zod_1.z.enum(['week', 'month', 'quarter', 'all']).optional().describe('Time period for analysis (default: month)'),
             },
         }, async (args) => {
             try {
@@ -1303,7 +1309,7 @@ This searches the entire manual database using AI-powered semantic understanding
                             break;
                     }
                 }
-                const cases = await caseService.searchCases({
+                const cases = await caseService_1.caseService.searchCases({
                     status: 'closed',
                     limit: 1000,
                 });
@@ -1391,16 +1397,16 @@ This searches the entire manual database using AI-powered semantic understanding
 Use this when you need to analyze multiple sources, compare products, or solve complex problems.
 This helps you organize your thoughts and ensure thorough analysis.`,
             inputSchema: {
-                topic: z.string().describe('What you are thinking about (e.g., "Compare L396 vs L600")'),
-                context: z.string().optional().describe('Additional context or user requirements'),
+                topic: zod_1.z.string().describe('What you are thinking about (e.g., "Compare L396 vs L600")'),
+                context: zod_1.z.string().optional().describe('Additional context or user requirements'),
             },
             outputSchema: {
-                thinkingId: z.string(),
-                topic: z.string(),
-                startedAt: z.string(),
+                thinkingId: zod_1.z.string(),
+                topic: zod_1.z.string(),
+                startedAt: zod_1.z.string(),
             },
         }, async (args) => {
-            const session = thinkingStore.createSession(args.topic, args.context);
+            const session = thinkingStore_1.thinkingStore.createSession(args.topic, args.context);
             return {
                 content: [
                     {
@@ -1420,15 +1426,15 @@ This helps you organize your thoughts and ensure thorough analysis.`,
 Call this after each piece of information you gather or analysis you make.
 This ensures structured reasoning and prevents jumping to conclusions.`,
             inputSchema: {
-                thinkingId: z.string().describe('The thinking session ID from start_thinking'),
-                thought: z.string().describe('Your current thought, observation, or analysis'),
-                type: z.enum(['observation', 'analysis', 'comparison', 'question', 'conclusion']).optional()
+                thinkingId: zod_1.z.string().describe('The thinking session ID from start_thinking'),
+                thought: zod_1.z.string().describe('Your current thought, observation, or analysis'),
+                type: zod_1.z.enum(['observation', 'analysis', 'comparison', 'question', 'conclusion']).optional()
                     .describe('Type of thought (default: observation)'),
-                metadata: z.record(z.any()).optional().describe('Optional metadata (e.g., source fileId, scores)'),
+                metadata: zod_1.z.record(zod_1.z.any()).optional().describe('Optional metadata (e.g., source fileId, scores)'),
             },
         }, async (args) => {
-            const entry = thinkingStore.addThought(args.thinkingId, args.thought, args.type, args.metadata);
-            const session = thinkingStore.getSession(args.thinkingId);
+            const entry = thinkingStore_1.thinkingStore.addThought(args.thinkingId, args.thought, args.type, args.metadata);
+            const session = thinkingStore_1.thinkingStore.getSession(args.thinkingId);
             const thoughtCount = session?.thoughts.length || 0;
             return {
                 content: [
@@ -1444,19 +1450,19 @@ This ensures structured reasoning and prevents jumping to conclusions.`,
 Always call this after you have gathered enough information and analyzed it.
 This ensures you provide a well-reasoned answer.`,
             inputSchema: {
-                thinkingId: z.string().describe('The thinking session ID'),
-                conclusion: z.string().describe('Your final conclusion or answer'),
+                thinkingId: zod_1.z.string().describe('The thinking session ID'),
+                conclusion: zod_1.z.string().describe('Your final conclusion or answer'),
             },
             outputSchema: {
-                summary: z.object({
-                    topic: z.string(),
-                    thoughtCount: z.number(),
-                    duration: z.string(),
-                    conclusion: z.string(),
+                summary: zod_1.z.object({
+                    topic: zod_1.z.string(),
+                    thoughtCount: zod_1.z.number(),
+                    duration: zod_1.z.string(),
+                    conclusion: zod_1.z.string(),
                 }),
             },
         }, async (args) => {
-            const session = thinkingStore.completeSession(args.thinkingId, args.conclusion);
+            const session = thinkingStore_1.thinkingStore.completeSession(args.thinkingId, args.conclusion);
             const duration = session.completedAt && session.startedAt
                 ? ((session.completedAt.getTime() - session.startedAt.getTime()) / 1000).toFixed(2)
                 : '0';
@@ -1482,7 +1488,7 @@ This ensures you provide a well-reasoned answer.`,
 ALWAYS call this after searching multiple sources or gathering data.
 This prevents incomplete analysis and ensures you have what you need.`,
             inputSchema: {
-                thinkingId: z.string().optional().describe('Optional thinking session ID to associate'),
+                thinkingId: zod_1.z.string().optional().describe('Optional thinking session ID to associate'),
             },
         }, async (args) => {
             const prompt = `Take a moment to reflect:
@@ -1504,7 +1510,7 @@ This prevents incomplete analysis and ensures you have what you need.`,
 
 What's your assessment?`;
             if (args.thinkingId) {
-                thinkingStore.addThought(args.thinkingId, 'Reflecting on collected information', 'analysis');
+                thinkingStore_1.thinkingStore.addThought(args.thinkingId, 'Reflecting on collected information', 'analysis');
             }
             return {
                 content: [{ type: 'text', text: prompt }],
@@ -1515,8 +1521,8 @@ What's your assessment?`;
 Call this before providing your final answer, especially in long conversations.
 Prevents scope creep and ensures you answer what was actually asked.`,
             inputSchema: {
-                thinkingId: z.string().optional(),
-                originalQuestion: z.string().optional().describe('The user\'s original question'),
+                thinkingId: zod_1.z.string().optional(),
+                originalQuestion: zod_1.z.string().optional().describe('The user\'s original question'),
             },
         }, async (args) => {
             const prompt = `Verify you're answering the right question:
@@ -1536,7 +1542,7 @@ Prevents scope creep and ensures you answer what was actually asked.`,
 
 Adjust your approach if needed before finalizing your answer.`;
             if (args.thinkingId) {
-                thinkingStore.addThought(args.thinkingId, 'Checking task adherence', 'analysis');
+                thinkingStore_1.thinkingStore.addThought(args.thinkingId, 'Checking task adherence', 'analysis');
             }
             return {
                 content: [{ type: 'text', text: prompt }],
@@ -1547,7 +1553,7 @@ Adjust your approach if needed before finalizing your answer.`;
 Always call this before giving your final answer to the user.
 Ensures you provide accurate, helpful, and well-structured responses.`,
             inputSchema: {
-                thinkingId: z.string().optional(),
+                thinkingId: zod_1.z.string().optional(),
             },
         }, async (args) => {
             const prompt = `Before answering, verify quality:
@@ -1574,7 +1580,7 @@ Ensures you provide accurate, helpful, and well-structured responses.`,
 
 If any aspect is lacking, improve before responding.`;
             if (args.thinkingId) {
-                thinkingStore.addThought(args.thinkingId, 'Evaluating answer quality', 'analysis');
+                thinkingStore_1.thinkingStore.addThought(args.thinkingId, 'Evaluating answer quality', 'analysis');
             }
             return {
                 content: [{ type: 'text', text: prompt }],
@@ -1583,7 +1589,7 @@ If any aspect is lacking, improve before responding.`;
     }
     registerResources() {
         // Register resource template for manuals
-        const manualsTemplate = new ResourceTemplate('waferlock://manuals/{id}', {
+        const manualsTemplate = new mcp_js_1.ResourceTemplate('waferlock://manuals/{id}', {
             list: async () => {
                 const manuals = await this.manualProvider.listManuals();
                 return {
@@ -1634,7 +1640,7 @@ If any aspect is lacking, improve before responding.`;
             };
         });
         // Register resource template for Q&A
-        const qaTemplate = new ResourceTemplate('waferlock://qa/{categoryOrId}', {
+        const qaTemplate = new mcp_js_1.ResourceTemplate('waferlock://qa/{categoryOrId}', {
             list: async () => {
                 const entries = await this.qaProvider.listQA({});
                 const categories = new Set(entries.map(e => e.category));
@@ -1707,9 +1713,9 @@ If any aspect is lacking, improve before responding.`;
         this.server.registerPrompt('troubleshoot_device', {
             description: 'Guide user through systematic device troubleshooting',
             argsSchema: {
-                device_model: z.string().describe('Device model number (e.g., WL-100, WL-200)'),
-                error_code: z.string().optional().describe('Error code or symptom description'),
-                customer_description: z.string().optional().describe('Customer description of the problem'),
+                device_model: zod_1.z.string().describe('Device model number (e.g., WL-100, WL-200)'),
+                error_code: zod_1.z.string().optional().describe('Error code or symptom description'),
+                customer_description: zod_1.z.string().optional().describe('Customer description of the problem'),
             },
         }, async (args) => {
             const model = args.device_model;
@@ -1773,9 +1779,9 @@ Please begin the troubleshooting process.`;
         this.server.registerPrompt('installation_guide', {
             description: 'Provide step-by-step installation guidance',
             argsSchema: {
-                device_model: z.string().describe('Device model to install'),
-                installation_type: z.string().optional().describe('Installation type: new_installation, replacement, upgrade'),
-                environment: z.string().optional().describe('Installation environment details'),
+                device_model: zod_1.z.string().describe('Device model to install'),
+                installation_type: zod_1.z.string().optional().describe('Installation type: new_installation, replacement, upgrade'),
+                environment: zod_1.z.string().optional().describe('Installation environment details'),
             },
         }, async (args) => {
             const model = args.device_model;
@@ -1847,9 +1853,9 @@ Begin with the pre-installation checklist.`;
         this.server.registerPrompt('maintenance_checklist', {
             description: 'Generate periodic maintenance checklist',
             argsSchema: {
-                device_model: z.string().describe('Device model for maintenance'),
-                maintenance_type: z.string().describe('Maintenance type: daily, weekly, monthly, quarterly, annual'),
-                operating_hours: z.string().optional().describe('Device operating hours or usage level'),
+                device_model: zod_1.z.string().describe('Device model for maintenance'),
+                maintenance_type: zod_1.z.string().describe('Maintenance type: daily, weekly, monthly, quarterly, annual'),
+                operating_hours: zod_1.z.string().optional().describe('Device operating hours or usage level'),
             },
         }, async (args) => {
             const model = args.device_model;
@@ -1924,8 +1930,8 @@ Present the checklist in an easy-to-follow format.`;
         this.server.registerPrompt('common_issues', {
             description: 'Quick answers for frequently asked questions',
             argsSchema: {
-                device_model: z.string().optional().describe('Device model (optional, for model-specific issues)'),
-                issue_category: z.string().optional().describe('Issue category: connection, power, configuration, performance, error_codes'),
+                device_model: zod_1.z.string().optional().describe('Device model (optional, for model-specific issues)'),
+                issue_category: zod_1.z.string().optional().describe('Issue category: connection, power, configuration, performance, error_codes'),
             },
         }, async (args) => {
             const model = args.device_model || 'All models';
@@ -1983,9 +1989,9 @@ Generate the common issues list now.`;
         this.server.registerPrompt('warranty_check', {
             description: 'Guide warranty status verification and claim process',
             argsSchema: {
-                serial_number: z.string().optional().describe('Device serial number'),
-                purchase_date: z.string().optional().describe('Purchase date (YYYY-MM-DD)'),
-                issue_type: z.string().optional().describe('Type of issue: hardware_failure, software_bug, physical_damage, other'),
+                serial_number: zod_1.z.string().optional().describe('Device serial number'),
+                purchase_date: zod_1.z.string().optional().describe('Purchase date (YYYY-MM-DD)'),
+                issue_type: zod_1.z.string().optional().describe('Type of issue: hardware_failure, software_bug, physical_damage, other'),
             },
         }, async (args) => {
             const serial = args.serial_number || 'Not provided';
@@ -2073,7 +2079,7 @@ Proceed with the warranty check.`;
             };
         });
     }
-    async start(transport = new StdioServerTransport()) {
+    async start(transport = new stdio_js_1.StdioServerTransport()) {
         await this.server.connect(transport);
         console.error('Waferlock Robot MCP server running on stdio');
         const keepAlive = setInterval(() => {
@@ -2151,7 +2157,9 @@ Proceed with the warranty check.`;
         return this.server;
     }
 }
-export const mcpService = new MCPService();
-export function createMcpService(options) {
+exports.MCPService = MCPService;
+exports.mcpService = new MCPService();
+function createMcpService(options) {
     return new MCPService(options);
 }
+exports.createMcpService = createMcpService;

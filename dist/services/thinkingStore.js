@@ -1,7 +1,10 @@
+"use strict";
 /**
  * Thinking Store - 管理 AI 的思考過程
  * 參考 Serena 的 thinking tools 設計
  */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.thinkingStore = void 0;
 class ThinkingStore {
     constructor() {
         this.sessions = new Map();
@@ -105,4 +108,4 @@ class ThinkingStore {
         };
     }
 }
-export const thinkingStore = new ThinkingStore();
+exports.thinkingStore = new ThinkingStore();
