@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.createQAApiProvider = void 0;
+exports.createQAApiProvider = createQAApiProvider;
 function toQaEntry(entry) {
     return {
         ...entry,
@@ -84,4 +84,3 @@ function createQAApiProvider(apiUrl, apiToken) {
         },
     };
 }
-exports.createQAApiProvider = createQAApiProvider;

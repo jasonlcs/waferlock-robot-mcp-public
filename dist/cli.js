@@ -84,10 +84,10 @@ async function main() {
     let manualProvider;
     let qaProvider;
     try {
-        const url = manualApiProvider_js_1.resolveApiUrl(apiUrl);
+        const url = (0, manualApiProvider_js_1.resolveApiUrl)(apiUrl);
         resolvedApiUrl = url.toString();
-        manualProvider = manualApiProvider_js_1.createManualApiProvider(resolvedApiUrl, apiToken);
-        qaProvider = qaApiProvider_js_1.createQAApiProvider(resolvedApiUrl, apiToken);
+        manualProvider = (0, manualApiProvider_js_1.createManualApiProvider)(resolvedApiUrl, apiToken);
+        qaProvider = (0, qaApiProvider_js_1.createQAApiProvider)(resolvedApiUrl, apiToken);
     }
     catch (error) {
         const message = error instanceof Error ? error.message : String(error);

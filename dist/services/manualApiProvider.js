@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.createManualApiProvider = exports.resolveApiUrl = void 0;
+exports.resolveApiUrl = resolveApiUrl;
+exports.createManualApiProvider = createManualApiProvider;
 function resolveApiUrl(baseUrl) {
     const trimmed = baseUrl.trim();
     const hasProtocol = /^[a-zA-Z][\w+.-]*:/.test(trimmed);
@@ -12,7 +13,6 @@ function resolveApiUrl(baseUrl) {
         throw new Error(`Invalid API URL provided: ${baseUrl}`);
     }
 }
-exports.resolveApiUrl = resolveApiUrl;
 function buildEndpoint(root, path) {
     const next = new URL(path.replace(/^\//, ''), root);
     return next.toString();
@@ -107,4 +107,3 @@ function createManualApiProvider(apiUrl, apiToken) {
         },
     };
 }
-exports.createManualApiProvider = createManualApiProvider;

@@ -1,22 +1,18 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.createS3ManualProvider = void 0;
-const s3Service_1 = require("./s3Service");
+exports.createS3ManualProvider = createS3ManualProvider;
+/**
+ * Public CLI 目前不支援直接存取 S3，因此提供退回錯誤的預設實作，
+ * 避免在沒有 API provider 的情況下呼叫而造成不可預期行為。
+ */
 function createS3ManualProvider() {
+    const unsupported = async () => {
+        throw new Error('S3 manual provider is not available in waferlock-robot-mcp-public.');
+    };
     return {
-        listManuals: () => s3Service_1.s3Service.listFiles(),
-        getManualById: (id) => s3Service_1.s3Service.getFileById(id),
-        getManualDownloadUrl: (id, options) => s3Service_1.s3Service.generateDownloadUrl(id, options),
-        getManualContent: async (id) => {
-            const result = await s3Service_1.s3Service.downloadFileBuffer(id);
-            if (!result) {
-                return undefined;
-            }
-            return {
-                file: result.file,
-                contentBase64: result.buffer.toString('base64'),
-            };
-        },
+        listManuals: unsupported,
+        getManualById: unsupported,
+        getManualDownloadUrl: unsupported,
+        getManualContent: unsupported,
     };
 }
-exports.createS3ManualProvider = createS3ManualProvider;

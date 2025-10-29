@@ -8,7 +8,7 @@ var TokenScope;
     TokenScope["McpAccess"] = "mcp:access";
     TokenScope["QaRead"] = "qa:read";
     TokenScope["QaManage"] = "qa:manage";
-})(TokenScope = exports.TokenScope || (exports.TokenScope = {}));
+})(TokenScope || (exports.TokenScope = TokenScope = {}));
 exports.ALL_TOKEN_SCOPES = [
     TokenScope.FilesRead,
     TokenScope.FilesWrite,

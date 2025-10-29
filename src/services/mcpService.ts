@@ -4,7 +4,72 @@ import { z } from 'zod';
 import { QAEntry, UploadedFile } from '../types.js';
 import { createManualApiProvider } from './manualApiProvider.js';
 import { createQAApiProvider } from './qaApiProvider.js';
-import { thinkingStore } from './thinkingStore.js';
+import { thinkingStore, ThinkingSession, ThoughtEntry } from './thinkingStore.js';
+
+type HeaderRecord = Record<string, string>;
+
+interface HeadersLike {
+  forEach(callback: (value: string, key: string) => void): void;
+}
+
+type HeaderInitInput = HeaderRecord | string[][] | HeadersLike;
+
+function isHeadersLike(value: unknown): value is HeadersLike {
+  return typeof value === 'object' && value !== null && typeof (value as HeadersLike).forEach === 'function';
+}
+
+function serialiseThinkingEntry(entry: ThoughtEntry) {
+  return {
+    ...entry,
+    timestamp: entry.timestamp.toISOString(),
+  };
+}
+
+function serialiseThinkingSession(session: ThinkingSession) {
+  return {
+    ...session,
+    startedAt: session.startedAt.toISOString(),
+    completedAt: session.completedAt ? session.completedAt.toISOString() : null,
+    thoughts: session.thoughts.map(serialiseThinkingEntry),
+  };
+}
+
+function serialiseManual(manual: UploadedFile) {
+  return {
+    ...manual,
+    uploadedAt: manual.uploadedAt instanceof Date ? manual.uploadedAt.toISOString() : manual.uploadedAt,
+    indexStartedAt: manual.indexStartedAt || null,
+    indexCompletedAt: manual.indexCompletedAt || null,
+  };
+}
+
+function formatManual(manual: UploadedFile): string {
+  return JSON.stringify(serialiseManual(manual), null, 2);
+}
+
+function formatManualList(manuals: UploadedFile[]): string {
+  return JSON.stringify(manuals.map(serialiseManual), null, 2);
+}
+
+function serialiseQA(entry: QAEntry) {
+  return {
+    ...entry,
+    createdAt: entry.createdAt instanceof Date ? entry.createdAt.toISOString() : entry.createdAt,
+    updatedAt: entry.updatedAt instanceof Date ? entry.updatedAt.toISOString() : entry.updatedAt,
+  };
+}
+
+function formatQA(entry: QAEntry): string {
+  return JSON.stringify(serialiseQA(entry), null, 2);
+}
+
+function formatQAList(entries: QAEntry[]): string {
+  return JSON.stringify(entries.map(serialiseQA), null, 2);
+}
+
+function normalizeApiBase(url: string): string {
+  return url.replace(/\/+$/, '');
+}
 
 export class MCPService {
   private server: McpServer;
@@ -12,29 +77,36 @@ export class MCPService {
   private serverVersion: string;
   private manualProvider: any;
   private qaProvider: any;
+  private apiUrl: string | null = null;
+  private apiToken: string | null = null;
 
-  constructor(options: { 
-    name?: string; 
+  constructor(options: {
+    name?: string;
     version?: string;
     manualProvider?: any;
     qaProvider?: any;
+    apiUrl?: string;
+    apiToken?: string;
   } = {}) {
     this.serverName = options.name || 'waferlock-robot-mcp';
     this.serverVersion = options.version || '2.1.0';
-    
+
+    const resolvedApiUrl = options.apiUrl || process.env.API_URL || '';
+    const resolvedApiToken = options.apiToken || process.env.API_TOKEN || '';
+
+    if (!resolvedApiUrl || !resolvedApiToken) {
+      throw new Error('API_URL and API_TOKEN are required');
+    }
+
+    this.apiUrl = normalizeApiBase(resolvedApiUrl);
+    this.apiToken = resolvedApiToken;
+
     if (options.manualProvider && options.qaProvider) {
       this.manualProvider = options.manualProvider;
       this.qaProvider = options.qaProvider;
     } else {
-      const apiUrl = process.env.API_URL || '';
-      const apiToken = process.env.API_TOKEN || '';
-
-      if (!apiUrl || !apiToken) {
-        throw new Error('API_URL and API_TOKEN are required');
-      }
-
-      this.manualProvider = createManualApiProvider(apiUrl, apiToken);
-      this.qaProvider = createQAApiProvider(apiUrl, apiToken);
+      this.manualProvider = createManualApiProvider(this.apiUrl, this.apiToken);
+      this.qaProvider = createQAApiProvider(this.apiUrl, this.apiToken);
     }
     
     this.server = new McpServer({
@@ -43,6 +115,76 @@ export class MCPService {
     });
 
     this.registerTools();
+  }
+
+  private buildApiUrl(path: string): string {
+    if (!this.apiUrl) {
+      throw new Error('API_URL is not configured');
+    }
+    return `${this.apiUrl}/${path.replace(/^\//, '')}`;
+  }
+
+  private mergeHeaders(extra?: HeaderInitInput): HeaderRecord {
+    if (!this.apiToken) {
+      throw new Error('API_TOKEN is not configured');
+    }
+
+    const base: HeaderRecord = {
+      Accept: 'application/json',
+      Authorization: `Bearer ${this.apiToken}`,
+    };
+
+    if (!extra) {
+      return base;
+    }
+
+    if (Array.isArray(extra)) {
+      for (const [key, value] of extra) {
+        if (typeof key === 'string' && typeof value === 'string') {
+          base[key] = value;
+        }
+      }
+      return base;
+    }
+
+    if (isHeadersLike(extra)) {
+      extra.forEach((value, key) => {
+        base[key] = value;
+      });
+      return base;
+    }
+
+    return {
+      ...base,
+      ...(extra as HeaderRecord),
+    };
+  }
+
+  private async requestJson(path: string, init: RequestInit = {}) {
+    const response = await fetch(this.buildApiUrl(path), {
+      ...init,
+      headers: this.mergeHeaders(init.headers as HeaderInitInput | undefined),
+    });
+
+    const text = await response.text();
+    let parsed: any = null;
+    if (text) {
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        parsed = text;
+      }
+    }
+
+    if (!response.ok) {
+      const message =
+        parsed && typeof parsed === 'object' && parsed.error
+          ? parsed.error
+          : `${response.status} ${response.statusText}`;
+      throw new Error(`API request failed: ${message}`);
+    }
+
+    return parsed;
   }
 
   private registerTools() {
@@ -55,14 +197,22 @@ export class MCPService {
       },
       async () => {
         const manuals = await this.manualProvider.listManuals();
-        const sanitized = manuals.map((m: any) => ({
-          id: m.id,
-          originalName: m.originalName,
-          uploadedAt: m.uploadedAt,
-          size: m.size,
-          indexStatus: m.indexStatus
-        }));
-        return { content: [{ type: 'text', text: JSON.stringify(sanitized, null, 2) }] };
+        const serialised = manuals.map(serialiseManual);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text:
+                serialised.length > 0
+                  ? `Found ${serialised.length} manuals:\n\n${formatManualList(manuals)}`
+                  : 'No manuals found.',
+            },
+          ],
+          structuredContent: {
+            manuals: serialised,
+          },
+        };
       }
     );
 
@@ -75,18 +225,25 @@ export class MCPService {
       async (args) => {
         const manual = await this.manualProvider.getManualById(args.manualId);
         if (!manual) {
-          return { content: [{ type: 'text', text: 'Manual not found' }] };
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `Manual ${args.manualId} not found.`,
+              },
+            ],
+          };
         }
-        const info = {
-          id: manual.id,
-          originalName: manual.originalName,
-          uploadedAt: manual.uploadedAt,
-          size: manual.size,
-          indexStatus: manual.indexStatus,
-          numChunks: manual.numChunks,
-          numVectors: manual.numVectors
+        const serialised = serialiseManual(manual);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: formatManual(manual),
+            },
+          ],
+          structuredContent: serialised,
         };
-        return { content: [{ type: 'text', text: JSON.stringify(info, null, 2) }] };
       }
     );
 
@@ -102,14 +259,22 @@ export class MCPService {
           m.originalName?.toLowerCase().includes(args.query.toLowerCase()) ||
           m.filename?.toLowerCase().includes(args.query.toLowerCase())
         );
-        const sanitized = filtered.map((m: any) => ({
-          id: m.id,
-          originalName: m.originalName,
-          uploadedAt: m.uploadedAt,
-          size: m.size,
-          indexStatus: m.indexStatus
-        }));
-        return { content: [{ type: 'text', text: JSON.stringify(sanitized, null, 2) }] };
+        const serialised = filtered.map(serialiseManual);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text:
+                serialised.length > 0
+                  ? `Found ${serialised.length} manuals matching "${args.query}":\n\n${formatManualList(filtered)}`
+                  : `No manuals found matching "${args.query}".`,
+            },
+          ],
+          structuredContent: {
+            manuals: serialised,
+          },
+        };
       }
     );
 
@@ -127,26 +292,282 @@ export class MCPService {
       },
       async (args) => {
         try {
-          const response = await fetch(`${process.env.API_URL || ''}/api/vector-index/search`, {
+          const data = await this.requestJson('/api/vector-index/search', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${process.env.API_TOKEN || ''}`
             },
             body: JSON.stringify({
               fileId: args.fileId,
               query: args.query,
-              k: args.k || 5,
-              minScore: args.minScore || 0.0
-            })
+              k: args.k ?? 5,
+              minScore: args.minScore ?? 0.0,
+            }),
           });
-          const data = await response.json();
-          if (!response.ok) {
-            return { content: [{ type: 'text', text: `Error: ${data.error || 'Search failed'}` }] };
-          }
-          return { content: [{ type: 'text', text: JSON.stringify(data.results, null, 2) }] };
+
+          const results = Array.isArray(data?.results) ? data.results : [];
+          const summary =
+            results.length > 0
+              ? `Found ${results.length} relevant passages in ${args.fileId}:\n\n${results
+                  .map(
+                    (entry: any, index: number) =>
+                      `${index + 1}. Score: ${typeof entry.score === 'number' ? entry.score.toFixed(3) : 'n/a'}\n${
+                        entry.content?.slice(0, 250) ?? ''
+                      }${entry.content && entry.content.length > 250 ? '...' : ''}`
+                  )
+                  .join('\n\n')}`
+              : `No relevant passages found for "${args.query}" in manual ${args.fileId}.`;
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: summary,
+              },
+            ],
+            structuredContent: {
+              fileId: args.fileId,
+              query: args.query,
+              total: results.length,
+              results,
+            },
+          };
         } catch (error: any) {
-          return { content: [{ type: 'text', text: `Error: ${error.message}` }] };
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `Error performing vector search: ${error.message}`,
+              },
+            ],
+            structuredContent: {
+              fileId: args.fileId,
+              query: args.query,
+              total: 0,
+              results: [],
+            },
+          };
+        }
+      }
+    );
+
+    this.server.registerTool(
+      'search_manual_content',
+      {
+        description:
+          'Search within an extracted manual for relevant text snippets without downloading the full file.',
+        inputSchema: {
+          fileId: z.string(),
+          query: z.string(),
+          limit: z.number().int().min(1).max(10).optional(),
+        },
+      },
+      async (args) => {
+        try {
+          const params = new URLSearchParams({ query: args.query });
+          if (typeof args.limit === 'number') {
+            params.set('limit', String(Math.max(1, Math.min(args.limit, 10))));
+          }
+
+          const queryString = params.toString();
+          const data = await this.requestJson(
+            `/api/search/manual/${encodeURIComponent(args.fileId)}${queryString ? `?${queryString}` : ''}`
+          );
+
+          const results = Array.isArray(data?.results) ? data.results : [];
+          const summary =
+            results.length > 0
+              ? `Found ${results.length} snippets in ${args.fileId}:\n\n${results
+                  .map(
+                    (entry: any, index: number) =>
+                      `${index + 1}. Chunk ${entry.chunkOrder ?? 'n/a'}\n${entry.content}`
+                  )
+                  .join('\n\n')}`
+              : `No relevant snippets found for "${args.query}" in manual ${args.fileId}.`;
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: summary,
+              },
+            ],
+            structuredContent: {
+              fileId: data?.fileId ?? args.fileId,
+              query: data?.query ?? args.query,
+              resultCount: data?.resultCount ?? results.length,
+              results,
+            },
+          };
+        } catch (error: any) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `Manual content search failed: ${error.message}`,
+              },
+            ],
+            structuredContent: {
+              fileId: args.fileId,
+              query: args.query,
+              resultCount: 0,
+              results: [],
+            },
+          };
+        }
+      }
+    );
+
+    this.server.registerTool(
+      'search_all_manuals',
+      {
+        description:
+          'Search across all indexed manuals for relevant snippets based on extracted text (non-semantic).',
+        inputSchema: {
+          query: z.string(),
+          limit: z.number().int().min(1).max(20).optional(),
+        },
+      },
+      async (args) => {
+        try {
+          const params = new URLSearchParams({ query: args.query });
+          if (typeof args.limit === 'number') {
+            params.set('limit', String(Math.max(1, Math.min(args.limit, 20))));
+          }
+
+          const data = await this.requestJson(
+            `/api/search/all-manuals?${params.toString()}`
+          );
+          const results = Array.isArray(data?.results) ? data.results : [];
+
+          const manuals = await this.manualProvider.listManuals();
+          const fileNameMap = new Map<string, string>();
+          for (const manual of manuals) {
+            fileNameMap.set(manual.id, manual.originalName || manual.filename);
+          }
+
+          const enriched = results.map((entry: any) => ({
+            ...entry,
+            fileName: entry.fileName || fileNameMap.get(entry.fileId) || entry.fileId,
+          }));
+
+          const summary =
+            enriched.length > 0
+              ? `Found ${enriched.length} snippets across ${new Set(enriched.map((e: any) => e.fileId)).size} manuals:\n\n${enriched
+                  .map(
+                    (entry: any, index: number) =>
+                      `${index + 1}. [${entry.fileName}] Chunk ${entry.chunkOrder ?? 'n/a'}\n${entry.content}`
+                  )
+                  .join('\n\n')}`
+              : `No manuals contained "${args.query}".`;
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: summary,
+              },
+            ],
+            structuredContent: {
+              query: data?.query ?? args.query,
+              resultCount: data?.resultCount ?? enriched.length,
+              results: enriched,
+            },
+          };
+        } catch (error: any) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `Global manual search failed: ${error.message}`,
+              },
+            ],
+            structuredContent: {
+              query: args.query,
+              resultCount: 0,
+              results: [],
+            },
+          };
+        }
+      }
+    );
+
+    this.server.registerTool(
+      'semantic_search',
+      {
+        description:
+          'Perform semantic vector search across all manuals without specifying a file. Uses existing vector indexes.',
+        inputSchema: {
+          query: z.string(),
+          k: z.number().int().min(1).max(20).optional(),
+          minScore: z.number().min(0).max(1).optional(),
+        },
+      },
+      async (args) => {
+        try {
+          const data = await this.requestJson('/api/vector-index/search-all', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              query: args.query,
+              k: args.k ?? 5,
+              minScore: args.minScore ?? 0.5,
+            }),
+          });
+
+          const results = Array.isArray(data?.results) ? data.results : [];
+          const manuals = await this.manualProvider.listManuals();
+          const fileNameMap = new Map<string, string>();
+          for (const manual of manuals) {
+            fileNameMap.set(manual.id, manual.originalName || manual.filename);
+          }
+
+          const enriched = results.map((entry: any) => ({
+            ...entry,
+            fileName: entry.fileName || fileNameMap.get(entry.fileId) || entry.fileId,
+          }));
+
+          const summary =
+            enriched.length > 0
+              ? `Semantic search matched ${enriched.length} passages across ${new Set(enriched.map((e: any) => e.fileId)).size} manuals:\n\n${enriched
+                  .map(
+                    (entry: any, index: number) =>
+                      `${index + 1}. [${entry.fileName}] Score: ${typeof entry.score === 'number' ? entry.score.toFixed(3) : 'n/a'}\n${
+                        entry.content?.slice(0, 250) ?? ''
+                      }${entry.content && entry.content.length > 250 ? '...' : ''}`
+                  )
+                  .join('\n\n')}`
+              : `Semantic search returned no matches for "${args.query}".`;
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: summary,
+              },
+            ],
+            structuredContent: {
+              query: args.query,
+              total: enriched.length,
+              results: enriched,
+            },
+          };
+        } catch (error: any) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `Semantic search failed: ${error.message}`,
+              },
+            ],
+            structuredContent: {
+              query: args.query,
+              total: 0,
+              results: [],
+            },
+          };
         }
       }
     );
@@ -163,7 +584,21 @@ export class MCPService {
       },
       async (args) => {
         const entries = await this.qaProvider.listEntries(args);
-        return { content: [{ type: 'text', text: JSON.stringify(entries, null, 2) }] };
+        const serialised = entries.map(serialiseQA);
+        return {
+          content: [
+            {
+              type: 'text',
+              text:
+                serialised.length > 0
+                  ? `Found ${serialised.length} Q&A entries:\n\n${formatQAList(entries)}`
+                  : 'No Q&A entries found.',
+            },
+          ],
+          structuredContent: {
+            entries: serialised,
+          },
+        };
       }
     );
 
@@ -174,11 +609,34 @@ export class MCPService {
         inputSchema: {
           query: z.string(),
           limit: z.number().optional(),
+          intelligent: z.boolean().optional(),
         },
       },
       async (args) => {
-        const entries = await this.qaProvider.intelligentSearch(args.query, args.limit);
-        return { content: [{ type: 'text', text: JSON.stringify(entries, null, 2) }] };
+        const limit = Math.max(1, Math.min(args.limit ?? 5, 10));
+        const useIntelligent = args.intelligent !== false;
+        const entries = useIntelligent
+          ? await this.qaProvider.intelligentSearch(args.query, limit)
+          : (await this.qaProvider.searchEntries(args.query)).slice(0, limit);
+
+        const serialised = entries.map(serialiseQA);
+        return {
+          content: [
+            {
+              type: 'text',
+              text:
+                serialised.length > 0
+                  ? `Found ${serialised.length} Q&A entries for "${args.query}":\n\n${formatQAList(entries)}`
+                  : `No Q&A entries found for "${args.query}".`,
+            },
+          ],
+          structuredContent: {
+            query: args.query,
+            intelligent: useIntelligent,
+            limit,
+            entries: serialised,
+          },
+        };
       }
     );
 
@@ -190,7 +648,26 @@ export class MCPService {
       },
       async (args) => {
         const entry = await this.qaProvider.getEntryById(args.entryId);
-        return { content: [{ type: 'text', text: JSON.stringify(entry, null, 2) }] };
+        if (!entry) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `Q&A entry ${args.entryId} not found.`,
+              },
+            ],
+          };
+        }
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: formatQA(entry),
+            },
+          ],
+          structuredContent: serialiseQA(entry),
+        };
       }
     );
 
@@ -202,8 +679,17 @@ export class MCPService {
         inputSchema: { thought: z.string() },
       },
       async (args) => {
-        const id = thinkingStore.startThinking(args.thought);
-        return { content: [{ type: 'text', text: `Started thinking process: ${id}` }] };
+        const session = thinkingStore.createSession(args.thought);
+        thinkingStore.addThought(session.id, args.thought, 'observation');
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Started thinking process: ${session.id}`,
+            },
+          ],
+          structuredContent: serialiseThinkingSession(session),
+        };
       }
     );
 
@@ -217,8 +703,16 @@ export class MCPService {
         },
       },
       async (args) => {
-        thinkingStore.continueThinking(args.thinkingId, args.thought);
-        return { content: [{ type: 'text', text: 'Thinking continued' }] };
+        const entry = thinkingStore.addThought(args.thinkingId, args.thought, 'analysis');
+        return {
+          content: [
+            {
+              type: 'text',
+              text: 'Thinking continued',
+            },
+          ],
+          structuredContent: serialiseThinkingEntry(entry),
+        };
       }
     );
 
@@ -229,8 +723,16 @@ export class MCPService {
         inputSchema: { thinkingId: z.string() },
       },
       async (args) => {
-        const process = thinkingStore.finishThinking(args.thinkingId);
-        return { content: [{ type: 'text', text: JSON.stringify(process, null, 2) }] };
+        const session = thinkingStore.completeSession(args.thinkingId, 'Completed via MCP');
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(session, null, 2),
+            },
+          ],
+          structuredContent: serialiseThinkingSession(session),
+        };
       }
     );
 

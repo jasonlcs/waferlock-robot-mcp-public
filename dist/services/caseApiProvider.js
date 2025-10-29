@@ -3,7 +3,7 @@
  * Case API Provider - HTTP API wrapper for case management
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.createCaseApiProvider = void 0;
+exports.createCaseApiProvider = createCaseApiProvider;
 function createCaseApiProvider(apiUrl, apiToken) {
     const baseUrl = apiUrl.replace(/\/$/, '');
     if (!apiToken) {
@@ -75,4 +75,3 @@ function createCaseApiProvider(apiUrl, apiToken) {
         },
     };
 }
-exports.createCaseApiProvider = createCaseApiProvider;

@@ -1,5 +1,4 @@
 import { ManualContent, UploadedFile } from '../types';
-import { s3Service } from './s3Service';
 
 export interface ManualProvider {
   listManuals(): Promise<UploadedFile[]>;
@@ -15,21 +14,19 @@ export interface ManualDownloadOptions {
   expiresInSeconds?: number;
 }
 
+/**
+ * Public CLI 目前不支援直接存取 S3，因此提供退回錯誤的預設實作，
+ * 避免在沒有 API provider 的情況下呼叫而造成不可預期行為。
+ */
 export function createS3ManualProvider(): ManualProvider {
+  const unsupported = async () => {
+    throw new Error('S3 manual provider is not available in waferlock-robot-mcp-public.');
+  };
+
   return {
-    listManuals: () => s3Service.listFiles(),
-    getManualById: (id: string) => s3Service.getFileById(id),
-    getManualDownloadUrl: (id: string, options?: ManualDownloadOptions) =>
-      s3Service.generateDownloadUrl(id, options),
-    getManualContent: async (id: string) => {
-      const result = await s3Service.downloadFileBuffer(id);
-      if (!result) {
-        return undefined;
-      }
-      return {
-        file: result.file,
-        contentBase64: result.buffer.toString('base64'),
-      };
-    },
+    listManuals: unsupported,
+    getManualById: unsupported,
+    getManualDownloadUrl: unsupported,
+    getManualContent: unsupported as (id: string) => Promise<ManualContent | undefined>,
   };
 }
