@@ -130,6 +130,8 @@ async function main() {
     qaProvider,
     name: serverName,
     version: serverVersion,
+    apiUrl: resolvedApiUrl,
+    apiToken,
   });
 
   try {

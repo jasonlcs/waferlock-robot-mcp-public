@@ -60,18 +60,27 @@ class MCPService {
         this.apiToken = null;
         this.serverName = options.name || 'waferlock-robot-mcp';
         this.serverVersion = options.version || '2.1.0';
-        const resolvedApiUrl = options.apiUrl || process.env.API_URL || '';
-        const resolvedApiToken = options.apiToken || process.env.API_TOKEN || '';
-        if (!resolvedApiUrl || !resolvedApiToken) {
-            throw new Error('API_URL and API_TOKEN are required');
+        const resolvedApiUrl = options.apiUrl ?? process.env.API_URL ?? '';
+        const resolvedApiToken = options.apiToken ?? process.env.API_TOKEN ?? '';
+        if (!(options.manualProvider && options.qaProvider)) {
+            if (!resolvedApiUrl || !resolvedApiToken) {
+                throw new Error('API_URL and API_TOKEN are required');
+            }
         }
-        this.apiUrl = normalizeApiBase(resolvedApiUrl);
-        this.apiToken = resolvedApiToken;
+        if (resolvedApiUrl && resolvedApiUrl.length > 0) {
+            this.apiUrl = normalizeApiBase(resolvedApiUrl);
+        }
+        if (resolvedApiToken && resolvedApiToken.length > 0) {
+            this.apiToken = resolvedApiToken;
+        }
         if (options.manualProvider && options.qaProvider) {
             this.manualProvider = options.manualProvider;
             this.qaProvider = options.qaProvider;
         }
         else {
+            if (!this.apiUrl || !this.apiToken) {
+                throw new Error('API_URL and API_TOKEN are required');
+            }
             this.manualProvider = (0, manualApiProvider_js_1.createManualApiProvider)(this.apiUrl, this.apiToken);
             this.qaProvider = (0, qaApiProvider_js_1.createQAApiProvider)(this.apiUrl, this.apiToken);
         }

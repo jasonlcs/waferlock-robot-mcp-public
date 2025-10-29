@@ -105,6 +105,8 @@ async function main() {
         qaProvider,
         name: serverName,
         version: serverVersion,
+        apiUrl: resolvedApiUrl,
+        apiToken,
     });
     try {
         console.error(`Connecting Waferlock MCP to API at ${resolvedApiUrl}`);
