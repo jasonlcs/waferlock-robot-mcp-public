@@ -99,7 +99,7 @@ export function createQAApiProvider(apiUrl: string, apiToken: string): QAProvide
       const data = await apiRequest<ListResponse>(`/api/qa?search=${encodeURIComponent(query)}`);
       return (data.entries || []).map(toQaEntry);
     },
-    async intelligentSearch(query: string, limit: number = 5) {
+    async intelligentSearch(query: string, limit: number = 50) {
       // API provider delegates to searchEntries for now
       // TODO: Add dedicated intelligent search endpoint
       const results = await this.searchEntries(query);

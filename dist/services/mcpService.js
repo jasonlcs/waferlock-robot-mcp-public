@@ -6,23 +6,9 @@ const stdio_js_1 = require("@modelcontextprotocol/sdk/server/stdio.js");
 const zod_1 = require("zod");
 const manualApiProvider_js_1 = require("./manualApiProvider.js");
 const qaApiProvider_js_1 = require("./qaApiProvider.js");
-const thinkingStore_js_1 = require("./thinkingStore.js");
+const registerThinkingTools_js_1 = require("./registerThinkingTools.js");
 function isHeadersLike(value) {
     return typeof value === 'object' && value !== null && typeof value.forEach === 'function';
-}
-function serialiseThinkingEntry(entry) {
-    return {
-        ...entry,
-        timestamp: entry.timestamp.toISOString(),
-    };
-}
-function serialiseThinkingSession(session) {
-    return {
-        ...session,
-        startedAt: session.startedAt.toISOString(),
-        completedAt: session.completedAt ? session.completedAt.toISOString() : null,
-        thoughts: session.thoughts.map(serialiseThinkingEntry),
-    };
 }
 function serialiseManual(manual) {
     return {
@@ -536,55 +522,14 @@ class MCPService {
                 structuredContent: serialiseQA(entry),
             };
         });
-        // Thinking Tools (6)
-        this.server.registerTool('start_thinking', {
-            description: 'Start a thinking process',
-            inputSchema: { thought: zod_1.z.string() },
-        }, async (args) => {
-            const session = thinkingStore_js_1.thinkingStore.createSession(args.thought);
-            thinkingStore_js_1.thinkingStore.addThought(session.id, args.thought, 'observation');
-            return {
-                content: [
-                    {
-                        type: 'text',
-                        text: `Started thinking process: ${session.id}`,
-                    },
-                ],
-                structuredContent: serialiseThinkingSession(session),
-            };
-        });
-        this.server.registerTool('continue_thinking', {
-            description: 'Continue a thinking process',
-            inputSchema: {
-                thinkingId: zod_1.z.string(),
-                thought: zod_1.z.string(),
-            },
-        }, async (args) => {
-            const entry = thinkingStore_js_1.thinkingStore.addThought(args.thinkingId, args.thought, 'analysis');
-            return {
-                content: [
-                    {
-                        type: 'text',
-                        text: 'Thinking continued',
-                    },
-                ],
-                structuredContent: serialiseThinkingEntry(entry),
-            };
-        });
-        this.server.registerTool('finish_thinking', {
-            description: 'Finish a thinking process',
-            inputSchema: { thinkingId: zod_1.z.string() },
-        }, async (args) => {
-            const session = thinkingStore_js_1.thinkingStore.completeSession(args.thinkingId, 'Completed via MCP');
-            return {
-                content: [
-                    {
-                        type: 'text',
-                        text: JSON.stringify(session, null, 2),
-                    },
-                ],
-                structuredContent: serialiseThinkingSession(session),
-            };
+        // Thinking Tools
+        (0, registerThinkingTools_js_1.registerThinkingTools)(this.server, {
+            recommendedTools: [
+                'search_manual_content',
+                'search_manual_vector',
+                'semantic_search',
+                'search_qa_entries',
+            ],
         });
         this.server.registerTool('think_about_collected_information', {
             description: 'Reflect on collected information',
