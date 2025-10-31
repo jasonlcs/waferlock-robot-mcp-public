@@ -272,6 +272,69 @@ export class MCPService {
       }
     );
 
+    this.server.registerTool(
+      'get_manual_index_stats',
+      {
+        description:
+          'Retrieve indexing statistics for a manual to confirm whether content chunks are available.',
+        inputSchema: {
+          fileId: z.string().describe('The ID of the manual to inspect'),
+        },
+        outputSchema: {
+          fileId: z.string(),
+          fileName: z.string(),
+          isIndexed: z.boolean(),
+          totalChunks: z.number().optional(),
+          totalCharacters: z.number().optional(),
+          extractedAt: z.string().optional(),
+        },
+      },
+      async (args) => {
+        const manual = await this.manualProvider.getManualById(args.fileId);
+        if (!manual) {
+          throw new Error(`Manual ${args.fileId} not found.`);
+        }
+
+        const stats = await this.requestJson(
+          `/api/search/manual/${encodeURIComponent(args.fileId)}/stats`
+        );
+
+        const fileName = manual.originalName || manual.filename || args.fileId;
+        const isIndexed = !!stats?.isIndexed;
+        const totalChunks = typeof stats?.totalChunks === 'number' ? stats.totalChunks : undefined;
+        const totalCharacters =
+          typeof stats?.totalCharacters === 'number' ? stats.totalCharacters : undefined;
+        const extractedAt = typeof stats?.extractedAt === 'string' ? stats.extractedAt : undefined;
+
+        const structured = {
+          fileId: args.fileId,
+          fileName,
+          isIndexed,
+          totalChunks,
+          totalCharacters,
+          extractedAt,
+        };
+
+        const summary = isIndexed
+          ? `Manual "${fileName}" is indexed.\n- Chunks: ${
+              totalChunks ?? 'unknown'
+            }\n- Characters: ${totalCharacters ?? 'unknown'}${
+              extractedAt ? `\n- Extracted: ${extractedAt}` : ''
+            }`
+          : `Manual "${fileName}" is not yet indexed. It will become searchable once indexing completes.`;
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: summary,
+            },
+          ],
+          structuredContent: structured,
+        };
+      }
+    );
+
     // Vector Search (1)
     this.server.registerTool(
       'search_manual_vector',
